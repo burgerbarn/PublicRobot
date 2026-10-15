@@ -14,7 +14,8 @@ This is a generated copy of the owner's private project repository (`guide/publi
 included: the owner's home map (chapter 17 makes your own), voice recordings and the wake-word models
 trained on his voice (chapter 26 trains your own), the project's records (`docs/`). Two private values are
 placeholders: the package maintainer e-mail and the web-search host (`BUDDY_SEARCH_URL`, chapter 26).
-No licence has been chosen yet, so the default copyright applies.
+Licence: MIT (`LICENSE`), owner decision 2026-10-15. `voice/face/vendor/three.module.js` keeps its own MIT
+notice (three.js authors).
 
 396 files. By chapter:
 
