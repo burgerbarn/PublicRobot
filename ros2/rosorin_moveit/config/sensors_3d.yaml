@@ -1,0 +1,12 @@
+# Aurora depth camera -> MoveIt octomap: the arm plans around the room, not just itself. Eye-in-hand: the camera
+# moves with the arm; MoveIt removes points on the robot's own links (self-filter, padding below) before mapping.
+sensors: [aurora]
+aurora:
+  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+  point_cloud_topic: /aurora/points2
+  max_range: 2.0
+  point_subsample: 2
+  padding_offset: 0.02
+  padding_scale: 1.0
+  max_update_rate: 5.0
+  filtered_cloud_topic: /move_group/filtered_cloud

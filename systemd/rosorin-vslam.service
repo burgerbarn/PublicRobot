@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSOrin measured odometry from the depth camera (NVIDIA cuVSLAM RGB-D on the Aurora RGB + depth -> /odom_vslam)
+After=rosorin-base.service rosorin-camera.service
+Wants=rosorin-base.service rosorin-camera.service
+
+[Service]
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && exec ros2 run rosorin_base vslam_odom'
+KillSignal=SIGINT
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

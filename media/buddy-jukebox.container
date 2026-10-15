@@ -1,0 +1,18 @@
+# BUDDY JUKEBOX copy (widescreen TV layout, artist search, remote control for Buddy). Source: ~/media-apps/jukebox
+# (copied from server ~/openwebui-stack/jukebox 2026-09-28). Local only.
+[Unit]
+Description=Buddy jukebox (bigbuddy copy)
+
+[Container]
+Image=localhost/buddy-jukebox:latest
+ContainerName=buddy-jukebox
+PublishPort=127.0.0.1:8281:80
+EnvironmentFile=%h/media-apps/jukebox.env
+Environment=PLEX_URL=http://192.168.1.122:32400
+Environment=PLEX_MUSIC_SECTIONS=19,9
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

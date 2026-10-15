@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Simulated rebuild (owner 2026-10-08: "simulate this", "use the compute on bigbuddy"): run guide commands as a
+# fresh bigbuddy. Lives on bigbuddy as ~/lbsim/bin/bb. HOME=~/lbsim/home, so the guide's ~/jetson-flash is the
+# simulation's copy, never the real ~/jetson-flash (the real build, 11 GB, 2026-09-26).
+# Refuses commands that would touch the real build, the real robot or server.
+# Usage (from the Mac):  ssh bigbuddy '~/lbsim/bin/bb' <<'EOF'
+#                        ...commands from the chapter...
+#                        EOF
+set -uo pipefail
+SIMHOME=/home/burgerbarn/lbsim/home
+cmd=${1:-$(cat)}
+if grep -qE '(^|[^-a-z])jetson-flash:r36|/home/burgerbarn/jetson-flash|ssh +(-[^ ]+ +)*(rosorin|server)\b|rosorin-wifi' <<<"$cmd"; then
+  echo "LBSIM GUARD: this touches the real build, the real robot or server; use the simulation's names" >&2
+  exit 97
+fi
+mkdir -p "$SIMHOME"
+cd "$SIMHOME"
+HOME=$SIMHOME exec bash -c "$cmd"

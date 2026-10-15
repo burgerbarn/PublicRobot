@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Id": "buddytoggle",
+        "Name": "Buddy screen toggle",
+        "Description": "Meta+Shift+B flips between Buddy's face (kiosk Firefox, app id buddy-screen) and the desktop",
+        "Version": "1.0",
+        "License": "MIT",
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API": "javascript",
+    "KPackageStructure": "KWin/Script"
+}

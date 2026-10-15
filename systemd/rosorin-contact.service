@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSOrin contact monitor: wheels commanded but LiDAR sees no motion = crashed -> e-stop (behavior/contact_monitor.py --act)
+After=rosorin-base.service
+Wants=rosorin-base.service
+
+[Service]
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && source /home/burgerbarn/vision/venv/bin/activate && exec python /home/burgerbarn/behavior/contact_monitor.py --act --seconds 1e9'
+KillSignal=SIGINT
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

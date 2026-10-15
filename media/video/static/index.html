@@ -1,0 +1,1339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BUDDY VIDEO</title>
+<link rel="icon" href="data:,">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+* { box-sizing: border-box; }
+:root { --crt-intensity: 0.35; --accent: #ffb020; --accent2: #ff4d4d; }
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: #0a0a0a;
+  color: #eae6da;
+  font-family: 'VT323', monospace;
+  font-size: 19px;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 14px 60px;
+}
+
+.wrap { width: 100%; max-width: 900px; }
+
+/* ---- player ---- */
+.player {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,.6);
+}
+video {
+  position: absolute;
+  inset: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.crt-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* Mobile fullscreen: show the raw <video> directly instead of the WebGL
+   canvas (no CRT/etc. filter there, but this is what actually renders the
+   picture). object-fit:contain — a hand-rolled JS sizing replacement was
+   tried and produced a badly wrong (inverted-aspect) box; plain CSS
+   object-fit can't get this wrong. */
+body.mobile-video.video-fullscreen video,
+body.mobile-video.video-fullscreen-plain video {
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+  object-fit: contain;
+}
+body.mobile-video.video-fullscreen .crt-canvas,
+body.mobile-video.video-fullscreen-plain .crt-canvas { display: none; }
+.player-idle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  color: rgba(234,230,218,.35);
+  font-size: 22px;
+  letter-spacing: .1em;
+}
+.player-idle.hidden { display: none; }
+
+
+/* overlays: channel badge + title, top-left */
+.overlay-top {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px;
+  background: linear-gradient(to bottom, rgba(0,0,0,.65), transparent);
+  pointer-events: none;
+  transition: opacity .5s ease;
+}
+.channel-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #201400;
+  font-weight: bold;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 15px;
+  letter-spacing: .05em;
+  margin-bottom: 4px;
+}
+.now-title {
+  font-size: 22px;
+  text-shadow: 0 2px 6px rgba(0,0,0,.8);
+}
+.brand {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--accent);
+  letter-spacing: .08em;
+  text-shadow: 0 2px 6px rgba(0,0,0,.8);
+}
+
+/* bottom controls overlay: play/pause, fullscreen, progress */
+.overlay-bottom {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 12px;
+  background: linear-gradient(to top, rgba(0,0,0,.7), transparent);
+  transition: opacity .5s ease;
+}
+.progress {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,.2);
+  overflow: hidden;
+}
+.progress-fill { height: 100%; width: 0%; background: var(--accent); }
+.overlay-controls-row { display: flex; align-items: center; gap: 10px; }
+.icon-btn {
+  background: rgba(0,0,0,.4);
+  border: 1px solid rgba(255,255,255,.3);
+  color: #eae6da;
+  width: 34px; height: 34px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+}
+.icon-btn:hover { background: rgba(255,255,255,.15); }
+.icon-btn.wide-btn { width: auto; padding: 0 10px; font-size: 14px; }
+.spacer { flex: 1; }
+
+body.controls-idle .overlay-top,
+body.controls-idle .overlay-bottom { opacity: 0; }
+body.player-off .overlay-bottom { display: none; }
+
+body.controls-idle.video-fullscreen .tv-fs-exit,
+body.controls-idle.video-fullscreen-plain .plain-fs-exit { opacity: 0; pointer-events: none; }
+.tv-fs-exit, .plain-fs-exit { transition: opacity .5s ease; }
+body.controls-idle.video-fullscreen .tv-fs-frame,
+body.controls-idle.video-fullscreen .tv-fs-hole,
+body.controls-idle.video-fullscreen-plain .plain-fs { cursor: none; }
+
+/* stylized fullscreen */
+body.video-fullscreen .wrap { display: none; }
+body.video-fullscreen { padding: 0; background: #000; }
+
+/* fullscreen TV: the real photo on top (with a real transparent hole
+   punched exactly where the glass is), the video reparented behind it
+   into .tv-fs-hole so the photo's own bezel pixels mask it precisely —
+   same technique that worked before, now scoped to fullscreen only */
+.tv-fs-frame { display: none; }
+body.video-fullscreen .tv-fs-frame {
+  display: block;
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100vh * 822 / 607));
+  aspect-ratio: 822 / 607;
+  z-index: 1000;
+  filter: drop-shadow(0 20px 30px rgba(0,0,0,.6));
+}
+.tv-fs-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+}
+.tv-fs-hole {
+  position: absolute;
+  left: 11.5%;
+  top: 11.5%;
+  width: 57%;
+  height: 71%;
+  background: #000;
+  overflow: hidden;
+  z-index: 1;
+  cursor: pointer;
+}
+.tv-fs-exit {
+  position: absolute;
+  top: 4%;
+  right: 5%;
+  z-index: 6;
+  background: rgba(0,0,0,.45);
+  border: 1px solid rgba(255,255,255,.35);
+  color: #eae6da;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* plain fullscreen (toggle off): just the video, full viewport, CRT
+   overlay kept, no photo frame */
+.plain-fs { display: none; }
+body.video-fullscreen-plain .plain-fs {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+  cursor: pointer;
+}
+.plain-fs-exit {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 6;
+  background: rgba(0,0,0,.45);
+  border: 1px solid rgba(255,255,255,.35);
+  color: #eae6da;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* ---- channel surf buttons ---- */
+.surf-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+.surf-btn {
+  flex: 1;
+  background: linear-gradient(#2a2214, #171208);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 22px;
+  letter-spacing: .08em;
+  padding: 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+}
+.surf-btn:hover { background: #3a2f1a; }
+.surf-btn:active { transform: translateY(1px); }
+.surf-btn:disabled { opacity: .4; cursor: default; }
+
+/* ---- CRT dial ---- */
+.crt-dial-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  background: #14100a;
+  border: 1px solid #3a2f1a;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.crt-dial-label { font-size: 16px; letter-spacing: .08em; color: var(--accent); white-space: nowrap; }
+.crt-dial-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.crt-dial-value { font-size: 15px; opacity: .6; width: 3.5em; text-align: right; }
+
+.filter-select {
+  background: #14100a;
+  border: 1px solid #5a4a28;
+  color: #eae6da;
+  font-family: inherit;
+  font-size: 15px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.filter-select:focus { outline: none; border-color: var(--accent); }
+.ascii-tune-row { display: none; }
+.ascii-tune-row.show { display: flex; }
+
+.fs-toggle { position: relative; display: inline-block; cursor: pointer; }
+.fs-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.fs-toggle-track {
+  display: block;
+  width: 42px; height: 22px;
+  background: #3a2f1a;
+  border: 1px solid #5a4a28;
+  border-radius: 11px;
+  transition: background .2s ease;
+}
+.fs-toggle-thumb {
+  display: block;
+  width: 16px; height: 16px;
+  margin: 2px;
+  background: #8a7550;
+  border-radius: 50%;
+  transition: transform .2s ease, background .2s ease;
+}
+.fs-toggle input:checked + .fs-toggle-track { background: rgba(255,176,32,.35); border-color: var(--accent); }
+.fs-toggle input:checked + .fs-toggle-track .fs-toggle-thumb { transform: translateX(20px); background: var(--accent); }
+
+/* ---- stats panel ---- */
+.stats-panel {
+  margin-top: 16px;
+  background: #10140f;
+  border: 1px solid #2a3a26;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.stats-title { color: #7cff9e; font-size: 16px; letter-spacing: .1em; margin-bottom: 6px; }
+.stats-row { display: flex; gap: 22px; flex-wrap: wrap; font-size: 15px; opacity: .85; }
+.stats-ready { color: #7cff9e; margin-top: 4px; font-size: 15px; }
+
+/* ---- search / browse ---- */
+.browse-panel { margin-top: 16px; }
+.controls-row { display: flex; gap: 8px; margin-bottom: 10px; }
+input[type="text"] {
+  flex: 1; min-width: 0;
+  background: #14100a;
+  border: 2px solid #3a2f1a;
+  border-radius: 6px;
+  color: #eae6da;
+  font-family: inherit;
+  font-size: 16px;
+  padding: 8px 10px;
+  outline: none;
+}
+input[type="text"]:focus { border-color: var(--accent); }
+input[type="text"]::placeholder { color: rgba(234,230,218,.35); }
+button.shuffle {
+  background: rgba(255,176,32,.1);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 16px;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.shuffle:hover { background: rgba(255,176,32,.2); }
+
+.status-line { opacity: .55; font-size: 14px; margin-bottom: 6px; min-height: 18px; }
+
+.movie-list { max-height: 340px; overflow-y: auto; border: 1px solid #2a2214; border-radius: 8px; }
+.movie-row {
+  padding: 8px 10px;
+  border-bottom: 1px solid #2a2214;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.movie-row:last-child { border-bottom: none; }
+.movie-row:hover { background: rgba(255,176,32,.08); }
+.movie-title { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.movie-meta { opacity: .55; font-size: 13px; white-space: nowrap; }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(255,176,32,.3); border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="player" id="player">
+    <video id="video" playsinline></video>
+    <canvas class="crt-canvas" id="playerCanvas"></canvas>
+
+    <div class="player-idle" id="playerIdle">
+      <div>📺</div>
+      <div>PICK SOMETHING BELOW, OR HIT NEXT TO SURF</div>
+    </div>
+
+    <div class="overlay-top">
+      <div>
+        <div class="channel-badge" id="channelBadge">CH 1</div>
+        <div class="now-title" id="nowTitle"></div>
+      </div>
+      <div class="brand">BUDDY VIDEO</div>
+    </div>
+
+    <div class="overlay-bottom" id="overlayBottom">
+      <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="overlay-controls-row">
+        <button class="icon-btn wide-btn" id="rewindBtn" title="Back 30s">⏪ 30</button>
+        <button class="icon-btn" id="playPauseBtn" title="Play/Pause">❚❚</button>
+        <button class="icon-btn wide-btn" id="forwardBtn" title="Forward 30s">30 ⏩</button>
+        <span class="spacer"></span>
+        <button class="icon-btn" id="fsToggle" title="Fullscreen">⛶</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="surf-row">
+    <button class="surf-btn" id="prevBtn" disabled>◄◄ PREV</button>
+    <button class="surf-btn" id="nextBtn">NEXT ►►</button>
+  </div>
+
+  <div class="crt-dial-row webgl-filter-row">
+    <span class="crt-dial-label">📼 FILTER</span>
+    <select class="filter-select" id="filterSelect">
+      <option value="crt">CRT / Scanline</option>
+      <option value="vhs">VHS Tape</option>
+      <option value="film8mm">8mm Film</option>
+      <option value="seccam">Security Cam</option>
+      <option value="gameboy">Game Boy LCD</option>
+      <option value="ascii">ASCII</option>
+      <option value="off">Off</option>
+    </select>
+  </div>
+
+  <div class="crt-dial-row ascii-tune-row webgl-filter-row" id="asciiTuneRows">
+    <span class="crt-dial-label">🎨 COLOR DEPTH</span>
+    <input type="range" id="asciiLevelsSlider" min="2" max="16" value="4">
+    <span class="crt-dial-value" id="asciiLevelsValue">64</span>
+  </div>
+  <div class="crt-dial-row ascii-tune-row webgl-filter-row" id="asciiTuneRows2">
+    <span class="crt-dial-label">🔠 CHAR SIZE</span>
+    <input type="range" id="asciiCellSlider" min="3" max="24" value="8">
+    <span class="crt-dial-value" id="asciiCellValue">8px</span>
+  </div>
+
+  <div class="crt-dial-row webgl-filter-row">
+    <span class="crt-dial-label">📻 EFFECT STRENGTH</span>
+    <input type="range" id="crtSlider" min="0" max="100" value="35">
+    <span class="crt-dial-value" id="crtValue">35%</span>
+  </div>
+
+  <div class="crt-dial-row">
+    <span class="crt-dial-label">📺 TV FRAME IN FULLSCREEN</span>
+    <span class="spacer"></span>
+    <label class="fs-toggle">
+      <input type="checkbox" id="fsFrameToggle"><!-- [bigbuddy copy] frame off by default -->
+      <span class="fs-toggle-track"><span class="fs-toggle-thumb"></span></span>
+    </label>
+  </div>
+
+  <div class="stats-panel">
+    <div class="stats-title">DATABASE LOADED</div>
+    <div class="stats-row">
+      <span id="statMovies">📼 Total Movies: —</span>
+      <span id="statChannels">📡 Channels: —</span>
+    </div>
+    <div class="stats-ready" id="statReady">Connecting...</div>
+  </div>
+
+  <div class="browse-panel">
+    <div class="controls-row">
+      <input type="text" id="search" placeholder="search movies...">
+      <button class="shuffle" id="shuffleBtn">SHUFFLE</button>
+    </div>
+    <div class="status-line" id="status"></div>
+    <div class="movie-list" id="movieList"></div>
+  </div>
+
+</div>
+
+<div class="tv-fs-frame" id="tvFsFrame">
+  <img class="tv-fs-img" src="/tv-frame.png" alt="">
+  <div class="tv-fs-hole" id="tvFsHole">
+    <canvas class="crt-canvas" id="tvFsCanvas"></canvas>
+  </div>
+  <button class="tv-fs-exit" id="tvFsExit" title="Exit fullscreen">✕</button>
+</div>
+
+<div class="plain-fs" id="plainFs">
+  <canvas class="crt-canvas" id="plainFsCanvas"></canvas>
+  <button class="plain-fs-exit" id="plainFsExit" title="Exit fullscreen">✕</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
+<script>
+if (/Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent)) {
+  document.body.classList.add('mobile-video');
+}
+const els = {
+  player: document.getElementById('player'),
+  playerIdle: document.getElementById('playerIdle'),
+  video: document.getElementById('video'),
+  channelBadge: document.getElementById('channelBadge'),
+  nowTitle: document.getElementById('nowTitle'),
+  overlayBottom: document.getElementById('overlayBottom'),
+  progressFill: document.getElementById('progressFill'),
+  playPauseBtn: document.getElementById('playPauseBtn'),
+  rewindBtn: document.getElementById('rewindBtn'),
+  forwardBtn: document.getElementById('forwardBtn'),
+  fsToggle: document.getElementById('fsToggle'),
+  prevBtn: document.getElementById('prevBtn'),
+  nextBtn: document.getElementById('nextBtn'),
+  crtSlider: document.getElementById('crtSlider'),
+  crtValue: document.getElementById('crtValue'),
+  statMovies: document.getElementById('statMovies'),
+  statChannels: document.getElementById('statChannels'),
+  statReady: document.getElementById('statReady'),
+  search: document.getElementById('search'),
+  shuffleBtn: document.getElementById('shuffleBtn'),
+  status: document.getElementById('status'),
+  movieList: document.getElementById('movieList'),
+};
+
+let hls = null;
+let currentSession = null;
+let history = [];   // played-movie stack, for PREV
+let historyPos = -1; // index into history of what's currently showing
+
+// ---- WebGL CRT shader renderer ----
+// Renders the hidden <video> element into whichever canvas is currently
+// active (main player / TV-frame fullscreen / plain fullscreen), applying
+// real scanlines, an RGB aperture-grille mask, chromatic aberration, mild
+// barrel distortion and vignette — a proper shader instead of flat CSS
+// gradients laid over the video.
+const VERT_SRC = `
+attribute vec2 a_pos;
+attribute vec2 a_uv;
+varying vec2 v_uv;
+void main() {
+  v_uv = a_uv;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}`;
+
+// three interchangeable looks, all driven by the same u_intensity slider
+const FRAG_SHADERS = {
+  crt: `
+precision mediump float;
+uniform sampler2D u_tex;
+uniform vec2 u_resolution;
+uniform float u_intensity;
+varying vec2 v_uv;
+
+vec2 barrel(vec2 uv, float amt) {
+  vec2 cc = uv - 0.5;
+  float d = dot(cc, cc);
+  return uv + cc * d * amt;
+}
+
+void main() {
+  float curve = 0.05 * u_intensity;
+  vec2 uv = barrel(v_uv, curve);
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
+  vec2 cc = uv - 0.5;
+  float edge = dot(cc, cc);
+  float ab = 0.0022 * u_intensity * edge * 4.0;
+  float r = texture2D(u_tex, uv + vec2(ab, 0.0)).r;
+  float g = texture2D(u_tex, uv).g;
+  float b = texture2D(u_tex, uv - vec2(ab, 0.0)).b;
+  vec3 color = vec3(r, g, b);
+
+  // scanline/mask density is expressed against a fixed reference
+  // resolution (classic 480i-ish), not the actual canvas's raw device
+  // pixels — otherwise the same effect looks coarse/harsh on a small
+  // windowed player and fine on a big fullscreen canvas
+  float scan = sin(uv.y * 480.0 * 3.14159) * 0.5 + 0.5;
+  float scanline = mix(1.0, 0.55 + 0.45 * scan, u_intensity);
+  color *= scanline;
+
+  float stripe = mod(uv.x * 640.0, 3.0);
+  vec3 mask = vec3(1.0);
+  if (stripe < 1.0) mask = vec3(1.15, 0.85, 0.85);
+  else if (stripe < 2.0) mask = vec3(0.85, 1.15, 0.85);
+  else mask = vec3(0.85, 0.85, 1.15);
+  color *= mix(vec3(1.0), mask, u_intensity * 0.5);
+
+  float vig = smoothstep(0.9, 0.35, edge);
+  color *= mix(1.0, vig, u_intensity * 0.6);
+
+  color *= 1.0 + u_intensity * 0.12;
+
+  gl_FragColor = vec4(color, 1.0);
+}`,
+
+  vhs: `
+precision mediump float;
+uniform sampler2D u_tex;
+uniform vec2 u_resolution;
+uniform float u_intensity;
+uniform float u_time;
+varying vec2 v_uv;
+
+float rand(vec2 co) { return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453); }
+
+void main() {
+  vec2 uv = v_uv;
+
+  float roll = sin(uv.y * 8.0 + u_time * 1.3) * 0.004 * u_intensity;
+  uv.x += roll;
+
+  float band = step(0.985, rand(vec2(floor(u_time * 6.0), 3.0)));
+  float lineNoise = rand(vec2(floor(uv.y * u_resolution.y / 3.0), floor(u_time * 10.0)));
+  uv.x += (lineNoise - 0.5) * 0.02 * u_intensity * band;
+
+  float split = 0.004 * u_intensity;
+  float r = texture2D(u_tex, uv + vec2(split, 0.0)).r;
+  float g = texture2D(u_tex, uv).g;
+  float b = texture2D(u_tex, uv - vec2(split, 0.0)).b;
+  vec3 color = vec3(r, g, b);
+
+  float gray = dot(color, vec3(0.299, 0.587, 0.114));
+  color = mix(color, vec3(gray), 0.22 * u_intensity);
+
+  float scan = sin(uv.y * u_resolution.y * 1.5) * 0.5 + 0.5;
+  color *= mix(1.0, 0.82 + 0.18 * scan, u_intensity);
+
+  float noise = rand(uv * u_resolution.xy + u_time);
+  color += (noise - 0.5) * 0.07 * u_intensity;
+
+  vec2 cc = uv - 0.5;
+  float vig = smoothstep(0.9, 0.4, dot(cc, cc));
+  color *= mix(1.0, vig, u_intensity * 0.4);
+
+  gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+}`,
+
+  off: `
+precision mediump float;
+uniform sampler2D u_tex;
+varying vec2 v_uv;
+void main() {
+  gl_FragColor = texture2D(u_tex, v_uv);
+}`,
+
+  film8mm: `
+precision mediump float;
+uniform sampler2D u_tex;
+uniform vec2 u_resolution;
+uniform float u_intensity;
+uniform float u_time;
+varying vec2 v_uv;
+
+float rand(vec2 co) { return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453); }
+
+void main() {
+  vec2 uv = v_uv;
+  uv.x += sin(u_time * 0.7 + uv.y * 4.0) * 0.0015 * u_intensity;
+  uv.y += sin(u_time * 0.5) * 0.0008 * u_intensity;
+
+  vec3 color = texture2D(u_tex, uv).rgb;
+
+  vec3 sepia = vec3(
+    dot(color, vec3(0.393, 0.769, 0.189)),
+    dot(color, vec3(0.349, 0.686, 0.168)),
+    dot(color, vec3(0.272, 0.534, 0.131))
+  );
+  color = mix(color, sepia, 0.6 * u_intensity);
+
+  float g = (rand(uv * u_resolution.xy + u_time) - 0.5) * 0.18 * u_intensity;
+  color += g;
+
+  float scratchX = rand(vec2(floor(u_time * 3.0), 7.0));
+  float scratch = step(0.995, scratchX) * (1.0 - smoothstep(0.0, 0.004, abs(uv.x - scratchX)));
+  color += scratch * 0.6 * u_intensity;
+
+  float flicker = 1.0 + (rand(vec2(floor(u_time * 12.0), 1.0)) - 0.5) * 0.12 * u_intensity;
+  color *= flicker;
+
+  vec2 cc = uv - 0.5;
+  float vig = smoothstep(0.9, 0.3, dot(cc, cc));
+  color *= mix(1.0, vig, u_intensity * 0.5);
+
+  gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+}`,
+
+  seccam: `
+precision mediump float;
+uniform sampler2D u_tex;
+uniform vec2 u_resolution;
+uniform float u_intensity;
+uniform float u_time;
+varying vec2 v_uv;
+
+float rand(vec2 co) { return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453); }
+
+void main() {
+  vec2 uv = v_uv;
+  float cell = mix(1.0, 3.0, u_intensity);
+  vec2 puv = floor(uv * u_resolution / cell) * cell / u_resolution;
+  vec3 color = texture2D(u_tex, mix(uv, puv, u_intensity)).rgb;
+
+  float lum = dot(color, vec3(0.299, 0.587, 0.114));
+  vec3 green = vec3(0.15, 1.0, 0.35) * lum;
+  color = mix(color, green, 0.85 * u_intensity);
+
+  float scan = sin(uv.y * u_resolution.y * 1.8) * 0.5 + 0.5;
+  color *= mix(1.0, 0.7 + 0.3 * scan, u_intensity);
+
+  float noise = (rand(uv * u_resolution.xy + u_time * 30.0) - 0.5) * 0.1 * u_intensity;
+  color += noise;
+
+  vec2 cc = uv - 0.5;
+  float vig = smoothstep(0.85, 0.3, dot(cc, cc));
+  color *= mix(1.0, vig, u_intensity * 0.55);
+
+  gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+}`,
+
+  gameboy: `
+precision mediump float;
+uniform sampler2D u_tex;
+uniform vec2 u_resolution;
+uniform float u_intensity;
+varying vec2 v_uv;
+
+void main() {
+  float cell = mix(1.0, 6.0, u_intensity);
+  vec2 puv = floor(v_uv * u_resolution / cell) * cell / u_resolution;
+  vec2 uv = mix(v_uv, puv, u_intensity);
+  vec3 color = texture2D(u_tex, uv).rgb;
+  float lum = dot(color, vec3(0.299, 0.587, 0.114));
+
+  vec3 c0 = vec3(0.06, 0.22, 0.06);
+  vec3 c1 = vec3(0.19, 0.38, 0.19);
+  vec3 c2 = vec3(0.55, 0.68, 0.06);
+  vec3 c3 = vec3(0.74, 0.87, 0.42);
+  vec3 gb;
+  if (lum < 0.25) gb = c0;
+  else if (lum < 0.5) gb = c1;
+  else if (lum < 0.75) gb = c2;
+  else gb = c3;
+
+  color = mix(color, gb, u_intensity);
+
+  vec2 grid = fract(v_uv * u_resolution / cell);
+  float line = step(0.92, max(grid.x, grid.y));
+  color *= mix(1.0, 1.0 - line * 0.25 * u_intensity, u_intensity);
+
+  gl_FragColor = vec4(color, 1.0);
+}`,
+
+  ascii: `
+precision mediump float;
+uniform sampler2D u_tex;
+uniform sampler2D u_atlas;
+uniform vec2 u_resolution;
+uniform float u_intensity;
+uniform float u_charCount;
+uniform float u_levels;
+uniform float u_cellSize;
+varying vec2 v_uv;
+
+void main() {
+  float cell = u_cellSize;
+  vec2 cellCoord = floor(v_uv * u_resolution / cell);
+  vec2 cellUv = cellCoord * cell / u_resolution;
+  vec3 sampleColor = texture2D(u_tex, cellUv + (cell * 0.5) / u_resolution).rgb;
+  float lum = dot(sampleColor, vec3(0.299, 0.587, 0.114));
+
+  float charIndex = floor(lum * (u_charCount - 1.0) + 0.5);
+  vec2 local = fract(v_uv * u_resolution / cell);
+  vec2 atlasUv = vec2((charIndex + local.x) / u_charCount, local.y);
+  float glyph = texture2D(u_atlas, atlasUv).r;
+
+  // use the actual sampled color for the glyph (normalized so even dark
+  // scene colors stay visible/saturated against the near-black background),
+  // quantized to u_levels per channel (e.g. levels=4 -> RGB222 -> 64 colors,
+  // levels=8 -> RGB333-ish -> 512 colors) — tunable live from the dashboard
+  vec3 fg = clamp(sampleColor / max(lum, 0.12), 0.0, 1.0);
+  float steps = max(u_levels - 1.0, 1.0);
+  fg = vec3(
+    floor(fg.r * steps + 0.5) / steps,
+    floor(fg.g * steps + 0.5) / steps,
+    floor(fg.b * steps + 0.5) / steps
+  );
+  vec3 bg = vec3(0.0, 0.0, 0.0);
+  vec3 asciiColor = mix(bg, fg, glyph);
+
+  vec3 color = mix(sampleColor, asciiColor, u_intensity);
+  gl_FragColor = vec4(color, 1.0);
+}`,
+
+};
+
+function compileShader(gl, type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error('shader compile error', gl.getShaderInfoLog(s));
+  }
+  return s;
+}
+
+// real ASCII glyphs, light-to-dark visual density, rendered once into an
+// offscreen canvas strip so the shader can sample actual characters
+// instead of faking the look with dots/crosses
+const ASCII_CHARS = ' .:-=+*#%@';
+function buildAsciiAtlasCanvas() {
+  const cellSize = 32;
+  const c = document.createElement('canvas');
+  c.width = cellSize * ASCII_CHARS.length;
+  c.height = cellSize;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold ' + Math.floor(cellSize * 0.85) + 'px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < ASCII_CHARS.length; i++) {
+    ctx.fillText(ASCII_CHARS[i], i * cellSize + cellSize / 2, cellSize / 2 + 2);
+  }
+  return c;
+}
+const asciiAtlasCanvas = buildAsciiAtlasCanvas();
+
+function makeCrtRenderer(canvas) {
+  const gl = canvas.getContext('webgl', { antialias: false });
+  if (!gl) return null;
+
+  gl.clearColor(0, 0, 0, 1);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+  const atlasTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, asciiAtlasCanvas);
+
+  const quad = gl.createBuffer();
+  const uvBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0, 1,0, 0,1, 1,1]), gl.STATIC_DRAW);
+
+  // compile each filter's program lazily and cache it, so switching
+  // filters at runtime is just picking a different already-linked program
+  const programs = {};
+  function getProgram(name) {
+    if (programs[name]) return programs[name];
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compileShader(gl, gl.VERTEX_SHADER, VERT_SRC));
+    gl.attachShader(prog, compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SHADERS[name]));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error('program link error (' + name + ')', gl.getProgramInfoLog(prog));
+    }
+    programs[name] = {
+      prog,
+      aPos: gl.getAttribLocation(prog, 'a_pos'),
+      aUv: gl.getAttribLocation(prog, 'a_uv'),
+      uRes: gl.getUniformLocation(prog, 'u_resolution'),
+      uIntensity: gl.getUniformLocation(prog, 'u_intensity'),
+      uTime: gl.getUniformLocation(prog, 'u_time'),
+      uTex: gl.getUniformLocation(prog, 'u_tex'),
+      uAtlas: gl.getUniformLocation(prog, 'u_atlas'),
+      uCharCount: gl.getUniformLocation(prog, 'u_charCount'),
+      uLevels: gl.getUniformLocation(prog, 'u_levels'),
+      uCellSize: gl.getUniformLocation(prog, 'u_cellSize'),
+    };
+    return programs[name];
+  }
+
+  return {
+    draw(video, intensity, filterName, time, asciiLevels, asciiCellSize) {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (w === 0 || h === 0) return;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const p = getProgram(FRAG_SHADERS[filterName] ? filterName : 'crt');
+      gl.useProgram(p.prog);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
+      gl.enableVertexAttribArray(p.aUv);
+      gl.vertexAttribPointer(p.aUv, 2, gl.FLOAT, false, 0, 0);
+
+      // letterbox the quad to match the video's real aspect ratio inside
+      // the canvas (equivalent to CSS object-fit: contain, which we lost
+      // by moving from <video> to a raw WebGL texture draw)
+      const vw = video.videoWidth || 16, vh = video.videoHeight || 9;
+      const videoAspect = vw / vh;
+      const canvasAspect = canvas.width / canvas.height;
+      let sx = 1, sy = 1;
+      if (videoAspect > canvasAspect) sy = canvasAspect / videoAspect;
+      else sx = videoAspect / canvasAspect;
+      gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -sx, -sy,  sx, -sy,  -sx, sy,  sx, sy,
+      ]), gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(p.aPos);
+      gl.vertexAttribPointer(p.aPos, 2, gl.FLOAT, false, 0, 0);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      try {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+      } catch (e) { return; }
+      if (p.uTex) gl.uniform1i(p.uTex, 0);
+
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+      if (p.uAtlas) gl.uniform1i(p.uAtlas, 1);
+      if (p.uCharCount) gl.uniform1f(p.uCharCount, ASCII_CHARS.length);
+      if (p.uLevels) gl.uniform1f(p.uLevels, asciiLevels || 4);
+      if (p.uCellSize) gl.uniform1f(p.uCellSize, asciiCellSize || 8);
+
+      if (p.uRes) gl.uniform2f(p.uRes, canvas.width, canvas.height);
+      if (p.uIntensity) gl.uniform1f(p.uIntensity, intensity);
+      if (p.uTime) gl.uniform1f(p.uTime, time);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+  };
+}
+
+const crtCanvases = {
+  normal: document.getElementById('playerCanvas'),
+  frame: document.getElementById('tvFsCanvas'),
+  plain: document.getElementById('plainFsCanvas'),
+};
+const crtRenderers = {
+  normal: makeCrtRenderer(crtCanvases.normal),
+  frame: makeCrtRenderer(crtCanvases.frame),
+  plain: makeCrtRenderer(crtCanvases.plain),
+};
+let activeFilter = 'crt';
+let asciiLevels = 4;    // levels per channel; total colors = levels^3
+let asciiCellSize = 8;  // screen pixels per ascii character cell
+function currentCrtMode() {
+  if (document.body.classList.contains('video-fullscreen')) return 'frame';
+  if (document.body.classList.contains('video-fullscreen-plain')) return 'plain';
+  return 'normal';
+}
+function crtLoop(t) {
+  requestAnimationFrame(crtLoop);
+  const video = els.video;
+  if (!video || video.readyState < 2) return;
+  const mode = currentCrtMode();
+  const renderer = crtRenderers[mode];
+  const intensity = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--crt-intensity')) || 0;
+  if (renderer) renderer.draw(video, intensity, activeFilter, (t || 0) / 1000, asciiLevels, asciiCellSize);
+}
+requestAnimationFrame(crtLoop);
+
+function fmtDuration(ms) {
+  const mins = Math.round(ms / 60000);
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// ---- CRT dial ----
+function setCrt(v) {
+  const pct = Math.max(0, Math.min(150, v));   // [bigbuddy copy] up to 150 % via Buddy (slider stops at 100)
+  document.documentElement.style.setProperty('--crt-intensity', (pct / 100).toFixed(3));
+  els.crtValue.textContent = pct + '%';
+  els.crtSlider.value = pct;
+}
+setCrt(35);
+els.crtSlider.addEventListener('input', (e) => setCrt(Number(e.target.value)));
+
+// ---- filter type ----
+const filterSelect = document.getElementById('filterSelect');
+const asciiTuneRows = [document.getElementById('asciiTuneRows'), document.getElementById('asciiTuneRows2')];
+function updateAsciiTuneVisibility() {
+  asciiTuneRows.forEach(row => row.classList.toggle('show', filterSelect.value === 'ascii'));
+}
+filterSelect.addEventListener('change', () => {
+  activeFilter = filterSelect.value;
+  updateAsciiTuneVisibility();
+});
+updateAsciiTuneVisibility();
+
+// ---- ascii fine-tune: color depth + character size ----
+const asciiLevelsSlider = document.getElementById('asciiLevelsSlider');
+const asciiLevelsValue = document.getElementById('asciiLevelsValue');
+asciiLevelsSlider.addEventListener('input', () => {
+  asciiLevels = Number(asciiLevelsSlider.value);
+  asciiLevelsValue.textContent = (asciiLevels * asciiLevels * asciiLevels).toLocaleString();
+});
+asciiLevelsValue.textContent = (asciiLevels * asciiLevels * asciiLevels).toLocaleString();
+
+const asciiCellSlider = document.getElementById('asciiCellSlider');
+const asciiCellValue = document.getElementById('asciiCellValue');
+asciiCellSlider.addEventListener('input', () => {
+  asciiCellSize = Number(asciiCellSlider.value);
+  asciiCellValue.textContent = asciiCellSize + 'px';
+});
+
+// ---- idle overlay auto-hide ----
+let idleTimer;
+function armIdle() {
+  document.body.classList.remove('controls-idle');
+  clearTimeout(idleTimer);
+  if (!els.video.paused && !els.video.ended && els.video.currentTime > 0) {
+    idleTimer = setTimeout(() => document.body.classList.add('controls-idle'), 2500);
+  }
+}
+['mousemove', 'touchstart', 'click'].forEach(evt => document.addEventListener(evt, armIdle));
+els.video.addEventListener('play', armIdle);
+els.video.addEventListener('pause', armIdle);
+els.video.addEventListener('timeupdate', () => {
+  if (els.video.duration) {
+    els.progressFill.style.width = (els.video.currentTime / els.video.duration * 100) + '%';
+  }
+});
+
+// ---- playback ----
+async function playMovie(m, { pushHistory = true } = {}) {
+  els.status.textContent = 'Starting stream...';
+  const res = await fetch('/api/play?key=' + m.key);
+  const data = await res.json();
+  if (!data.manifest_url) { els.status.textContent = 'Could not start playback'; return; }
+  currentSession = data.session_id;
+
+  document.body.classList.add('player-on');
+  els.playerIdle.classList.add('hidden');
+  els.nowTitle.textContent = m.title + (m.year ? ` (${m.year})` : '');
+
+  if (pushHistory) {
+    history = history.slice(0, historyPos + 1);
+    history.push(m);
+    historyPos = history.length - 1;
+  }
+  els.prevBtn.disabled = historyPos <= 0;
+
+  if (hls) { hls.destroy(); hls = null; }
+  if (window.Hls && Hls.isSupported()) {
+    hls = new Hls();
+    hls.loadSource(data.manifest_url);
+    hls.attachMedia(els.video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => els.video.play());
+  } else if (els.video.canPlayType('application/vnd.apple.mpegurl')) {
+    els.video.src = data.manifest_url;
+    els.video.play();
+  } else {
+    els.status.textContent = 'This browser cannot play HLS video';
+  }
+  armIdle();
+}
+
+function stopPlayback() {
+  if (hls) { hls.destroy(); hls = null; }
+  els.video.pause();
+  els.video.removeAttribute('src');
+  els.video.load();
+  if (currentSession) {
+    fetch('/api/stop?session=' + currentSession).catch(() => {});
+    currentSession = null;
+  }
+}
+
+els.nextBtn.addEventListener('click', async () => {
+  els.status.textContent = 'Changing channel...';
+  try {
+    const res = await fetch('/api/random');
+    const data = await res.json();
+    if (data.movie) playMovie(data.movie);
+  } catch (e) {
+    els.status.textContent = 'Could not change channel';
+  }
+});
+
+// ---- channel badge: click to cycle through real Plex library channels ----
+let channelList = [];
+let currentChannel = 0;
+function updateChannelBadge() {
+  const ch = channelList[currentChannel];
+  els.channelBadge.textContent = 'CH ' + (currentChannel + 1);
+  els.channelBadge.title = ch ? ch.title : '';
+}
+els.channelBadge.addEventListener('click', async () => {
+  if (!channelList.length) return;
+  currentChannel = (currentChannel + 1) % channelList.length;
+  updateChannelBadge();
+  els.status.textContent = 'Changing channel...';
+  try {
+    const res = await fetch('/api/random?channel=' + currentChannel);
+    const data = await res.json();
+    if (data.movie) playMovie(data.movie);
+  } catch (e) {
+    els.status.textContent = 'Could not change channel';
+  }
+});
+
+els.prevBtn.addEventListener('click', () => {
+  if (historyPos > 0) {
+    historyPos--;
+    playMovie(history[historyPos], { pushHistory: false });
+  }
+});
+
+els.playPauseBtn.addEventListener('click', () => {
+  if (els.video.paused) els.video.play(); else els.video.pause();
+});
+els.rewindBtn.addEventListener('click', () => {
+  els.video.currentTime = Math.max(0, els.video.currentTime - 30);
+});
+els.forwardBtn.addEventListener('click', () => {
+  const dur = els.video.duration || Infinity;
+  els.video.currentTime = Math.min(dur, els.video.currentTime + 30);
+});
+
+const tvFsHole = document.getElementById('tvFsHole');
+const tvFsExit = document.getElementById('tvFsExit');
+const plainFs = document.getElementById('plainFs');
+const plainFsExit = document.getElementById('plainFsExit');
+const fsFrameToggle = document.getElementById('fsFrameToggle');
+
+function isFullscreenActive() {
+  return document.body.classList.contains('video-fullscreen') ||
+         document.body.classList.contains('video-fullscreen-plain');
+}
+
+function enterVideoFullscreen() {
+  // .player lives inside .wrap, and .wrap gets display:none in TV-frame
+  // fullscreen mode — an ancestor display:none collapses the <video> to
+  // a 0x0 box no matter what CSS is applied to it directly. Desktop never
+  // noticed because it only ever shows the *canvas* (WebGL texImage2D
+  // samples the video's decoded frame regardless of its own layout), but
+  // the video itself must physically live inside the visible fullscreen
+  // container for it to be showable directly (mobile's fallback below).
+  if (fsFrameToggle.checked) {
+    tvFsHole.appendChild(els.video);
+    document.body.classList.add('video-fullscreen');
+  } else {
+    plainFs.appendChild(els.video);
+    document.body.classList.add('video-fullscreen-plain');
+  }
+  els.fsToggle.textContent = '✕';
+  const isMobile = document.body.classList.contains('mobile-video');
+  if (!isMobile && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+}
+function exitVideoFullscreen() {
+  els.player.appendChild(els.video);
+  document.body.classList.remove('video-fullscreen', 'video-fullscreen-plain');
+  els.fsToggle.textContent = '⛶';
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+els.fsToggle.addEventListener('click', () => {
+  if (isFullscreenActive()) exitVideoFullscreen();
+  else enterVideoFullscreen();
+});
+tvFsExit.addEventListener('click', exitVideoFullscreen);
+plainFsExit.addEventListener('click', exitVideoFullscreen);
+tvFsHole.addEventListener('click', () => {
+  if (els.video.paused) els.video.play(); else els.video.pause();
+});
+plainFs.addEventListener('click', (e) => {
+  if (e.target === plainFsExit) return;
+  if (els.video.paused) els.video.play(); else els.video.pause();
+});
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && isFullscreenActive()) {
+    exitVideoFullscreen();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (!isFullscreenActive()) return;
+  if (e.key === 'Escape') exitVideoFullscreen();
+  if (e.key === 'ArrowRight') els.nextBtn.click();
+  if (e.key === 'ArrowLeft' && !els.prevBtn.disabled) els.prevBtn.click();
+});
+
+// ---- browse / search ----
+function movieRow(m) {
+  const row = document.createElement('div');
+  row.className = 'movie-row';
+  const title = document.createElement('div');
+  title.className = 'movie-title';
+  title.textContent = m.title + (m.year ? ` (${m.year})` : '');
+  const meta = document.createElement('div');
+  meta.className = 'movie-meta';
+  meta.textContent = m.duration_ms ? fmtDuration(m.duration_ms) : '';
+  row.appendChild(title);
+  row.appendChild(meta);
+  row.addEventListener('click', () => playMovie(m));
+  return row;
+}
+function renderMovies(movies) {
+  els.movieList.innerHTML = '';
+  movies.forEach(m => els.movieList.appendChild(movieRow(m)));
+}
+async function loadBrowse() {
+  els.status.textContent = 'Loading...';
+  const res = await fetch('/api/browse');
+  const data = await res.json();
+  renderMovies(data.movies);
+  els.status.textContent = `${data.movies.length} shown — search for something specific`;
+}
+async function doSearch(q) {
+  if (!q) return loadBrowse();
+  els.status.textContent = 'Searching...';
+  const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+  const data = await res.json();
+  renderMovies(data.movies);
+  els.status.textContent = `${data.movies.length} result(s) for "${q}"`;
+}
+els.shuffleBtn.addEventListener('click', loadBrowse);
+let searchTimer;
+els.search.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = els.search.value.trim();
+  searchTimer = setTimeout(() => doSearch(q), 350);
+});
+
+(async function init() {
+  try {
+    const res = await fetch('/api/init');
+    const data = await res.json();
+    els.statMovies.textContent = `📼 Total Movies: ${data.total_movies.toLocaleString()}`;
+    els.statChannels.textContent = `📡 Channels: ${data.channels}`;
+    els.statReady.textContent = '✓ Ready to Rock';
+    channelList = data.channel_list || [];
+    updateChannelBadge();
+    loadBrowse();
+  } catch (e) {
+    els.statReady.textContent = 'COULD NOT REACH PLEX — ' + e.message;
+  }
+})();
+
+</script>
+
+<!-- ===== [bigbuddy copy] Buddy remote control + per-style strength ===== -->
+<style>html.cursor-idle, html.cursor-idle * { cursor: none !important; }</style>
+<script>
+// [bigbuddy copy] hide the pointer after 3 s without movement; any movement brings it back
+(() => { let t; const wake = () => { document.documentElement.classList.remove('cursor-idle'); clearTimeout(t);
+  t = setTimeout(() => document.documentElement.classList.add('cursor-idle'), 3000); };
+  ['mousemove', 'mousedown', 'wheel', 'keydown'].forEach(e => addEventListener(e, wake, { passive: true })); wake(); })();
+</script>
+<style>
+/* [bigbuddy copy] TV layout (owner 2026-09-28): picture across the top (100 % x 77 vh), controls spread
+   horizontally in the bottom third: [surf / filter / strength / frame] [library] [search + movie list] */
+@media (min-width: 1200px) and (min-aspect-ratio: 4/3) {
+  body { padding: 0; height: 100vh; overflow: hidden; display: block; }
+  .wrap { max-width: none; width: 100vw; height: 100vh; box-sizing: border-box; padding: 0 1.5vw 1.5vh;
+          display: grid; grid-template-columns: 1.1fr 0.7fr 1.6fr; grid-template-rows: 77vh repeat(5, auto) 1fr;
+          column-gap: 1.5vw; row-gap: 8px; align-items: start; }
+  .wrap > .player { grid-column: 1 / -1; grid-row: 1; width: 100%; height: 77vh; aspect-ratio: auto;
+                    border-radius: 0 0 10px 10px; margin: 0 0 6px; }
+  .wrap > .surf-row, .wrap > .crt-dial-row { grid-column: 1; margin: 0; }
+  .wrap > .stats-panel { grid-column: 2; grid-row: 2 / span 4; margin: 0; }
+  .wrap > .browse-panel { grid-column: 3; grid-row: 2 / -1; margin: 0; display: flex; flex-direction: column;
+                          min-height: 0; max-height: calc(23vh - 2vh); }
+  .movie-list { flex: 1; min-height: 0; overflow-y: auto; }
+}
+</style>
+<script>
+(() => {
+  // effects are all driven by one strength (u_intensity); a shared 35 % made VHS/8mm nearly invisible
+  const STYLE_STRENGTH = { crt: 70, vhs: 100, film8mm: 90, seccam: 85, gameboy: 100, ascii: 100, off: 0 };
+  function applyStyle(name, strength) {
+    if (!(name in STYLE_STRENGTH)) return;
+    filterSelect.value = name; activeFilter = name; updateAsciiTuneVisibility();
+    setCrt(strength ?? STYLE_STRENGTH[name]);
+  }
+  setCrt(STYLE_STRENGTH[activeFilter] ?? 70);
+
+  function refullscreen() {
+    const fs = document.body.classList.contains('video-fullscreen') || document.body.classList.contains('video-fullscreen-plain');
+    if (fs) { exitVideoFullscreen(); enterVideoFullscreen(); }
+  }
+  // Plex can refuse a new transcode (400) while an old session for the same title lingers: retry once
+  function retryIfStuck(m) {
+    setTimeout(async () => {
+      if (els.video.readyState === 0 && els.video.currentTime === 0) {
+        console.warn('stream stuck, retrying', m.title);
+        await playMovie(m, { pushHistory: false });
+      }
+    }, 8000);
+  }
+  let last = null, boot = null;
+  async function run(c) {
+    const v = els.video, a = c.arg || {};
+    if (c.cmd === 'play' && a.movie) { await playMovie(a.movie); retryIfStuck(a.movie); }
+    else if (c.cmd === 'random') {
+      const q = (a.channel_index ?? null) === null ? '' : '?channel=' + a.channel_index;
+      const d = await (await fetch('/api/random' + q)).json();
+      if (d.movie) { await playMovie(d.movie); retryIfStuck(d.movie); }
+    }
+    else if (c.cmd === 'pause') v.pause();
+    else if (c.cmd === 'resume') await v.play();
+    else if (c.cmd === 'stop') { stopPlayback(); exitVideoFullscreen(); }
+    else if (c.cmd === 'style') applyStyle(a.name, a.strength);
+    else if (c.cmd === 'frame') { fsFrameToggle.checked = !!a.on; refullscreen(); }
+    else if (c.cmd === 'fullscreen') { if (a.on) enterVideoFullscreen(); else exitVideoFullscreen(); }
+  }
+  async function poll() {
+    try {
+      const r = await (await fetch('/api/remote/poll?after=' + (last ?? 0))).json();
+      if (boot !== null && r.boot !== boot) last = 0;      // container restarted: its counter restarted at 0
+      boot = r.boot;
+      if (last === null) last = r.last;
+      else for (const c of r.cmds) { last = c.id; try { await run(c); } catch (e) { console.warn('remote', e); } }
+    } catch (e) {}
+    setTimeout(poll, 700);
+  }
+  poll();
+  function report() {
+    fetch('/api/remote/state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: els.nowTitle.textContent || null, playing: !els.video.paused && !!currentSession,
+        style: activeFilter, strength: Number(els.crtSlider.value), frame: fsFrameToggle.checked,
+        position: els.video.currentTime || 0, duration: els.video.duration || 0 }) }).catch(() => {});
+  }
+  ['play', 'pause', 'ended'].forEach(ev => els.video.addEventListener(ev, report));
+  setInterval(report, 5000);
+})();
+</script>
+<script src="http://127.0.0.1:8290/overlay.js"></script><!-- [bigbuddy copy] Buddy corner face -->
+</body>
+</html>

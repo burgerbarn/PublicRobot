@@ -1,0 +1,28 @@
+[Unit]
+Description=ROSOrin on-board brain: vision-language model (NVIDIA vLLM Jetson container, OpenAI API on :8000)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+User=burgerbarn
+# Jetson AI Lab recipe (ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin). Memory is SHARED with the whole robot.
+# 2026-09-30: Qwen3-VL-4B FP8 (5.26 GB weights, Marlin weight-only on Orin) + 0.45 reservation -> the kernel
+# OOM-killed robot processes (LiDAR stalled, e-stop). Now: 4-bit AWQ (~3 GB), 0.30 reservation, no CUDA graphs
+# (--enforce-eager), and --oom-score-adj 1000 so the kernel kills THE BRAIN first, never the robot's core.
+# Images capped at 448x448 px (the mind sends 448-wide frames): profiling with the default max image size wanted
+# more than the whole reservation (KV cache -3.69 GiB, 2026-09-30).
+# Cache: the image's HF_HOME is /data/models/huggingface -> mounted to ~/hf_cache (download once).
+ExecStartPre=-/usr/bin/docker rm -f rosorin-brain
+ExecStart=/usr/bin/docker run --name rosorin-brain --rm --runtime nvidia --network host --shm-size=2g \
+  --oom-score-adj 1000 -v /home/burgerbarn/hf_cache:/data/models/huggingface \
+  ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin \
+  vllm serve ${BRAIN_MODEL} --host 0.0.0.0 --port 8000 --served-model-name brain \
+  --gpu-memory-utilization 0.30 --enforce-eager --max-model-len 2048 --max-num-seqs 2 --max-num-batched-tokens 2048 \
+  --limit-mm-per-prompt '{"image": 1}' --mm-processor-kwargs '{"max_pixels": 200704}'
+Environment=BRAIN_MODEL=cpatonn/Qwen3-VL-4B-Instruct-AWQ-4bit
+ExecStop=/usr/bin/docker stop -t 10 rosorin-brain
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

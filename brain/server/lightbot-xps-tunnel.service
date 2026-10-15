@@ -1,0 +1,11 @@
+[Unit]
+Description=SSH tunnels bigbuddy 127.0.0.1:8081/8082 -> XPS 127.0.0.1:8080 (coder) / 8082 (gpt-oss-20b)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L 127.0.0.1:8081:127.0.0.1:8080 -L 127.0.0.1:8082:127.0.0.1:8082 xps
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

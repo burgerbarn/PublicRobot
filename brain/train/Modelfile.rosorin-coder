@@ -1,0 +1,12 @@
+FROM ./merged
+TEMPLATE """{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{- range .Messages }}<|im_start|>{{ .Role }}
+{{ .Content }}<|im_end|>
+{{ end }}<|im_start|>assistant
+"""
+SYSTEM "You are a coding assistant for the lightBot robot (ROSOrin Pro, ROS 2 Humble on a Jetson) and the Buddy voice assistant."
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|im_start|>"
+PARAMETER num_ctx 8192
+PARAMETER temperature 0.2

@@ -1,0 +1,16 @@
+# ~/.config/systemd/user/buddy-voice.service on bigbuddy. Needs PipeWire (user session) and
+# lmstudio-server.service (LM Studio API on :1234, loads the model on first request).
+[Unit]
+Description=Buddy voice loop (yo buddy -> Whisper -> Gemma/LM Studio -> Kokoro on HDMI)
+After=pipewire.service pipewire-pulse.service lmstudio-server.service
+Wants=lmstudio-server.service
+
+[Service]
+ExecStart=/home/burgerbarn/voice/run_buddy_voice.sh
+Restart=on-failure
+RestartSec=5
+MemoryMax=8G
+MemorySwapMax=0
+
+[Install]
+WantedBy=default.target

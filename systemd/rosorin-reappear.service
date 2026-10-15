@@ -1,0 +1,8 @@
+[Unit]
+Description=ROSOrin self-training: where the owner reappears after leaving view (vision/reappear.py)
+
+[Service]
+Type=oneshot
+User=burgerbarn
+Nice=10
+ExecStart=/bin/bash -c 'source /home/burgerbarn/vision/venv/bin/activate && cd /home/burgerbarn/vision && python reappear.py'

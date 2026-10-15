@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSOrin practises with its own body and updates its body model (behavior/practice.py + learn_body.py; one session per start)
+After=rosorin-base.service
+Requires=rosorin-base.service
+
+[Service]
+Type=simple
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+Environment=PRACTICE=1
+ExecStart=/bin/bash /home/burgerbarn/setup/explore_run.sh
+ExecStopPost=/bin/bash -c 'source /opt/ros/humble/setup.bash && timeout 10 ros2 service call /rosorin_board_driver/enable std_srvs/srv/SetBool "{data: false}"'
+KillSignal=SIGINT
+TimeoutStopSec=30
+Restart=no

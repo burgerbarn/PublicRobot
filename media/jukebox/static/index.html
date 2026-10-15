@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BUDDY JUKEBOX</title>
+<link rel="icon" href="data:,">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Silkscreen:wght@400;700&display=swap');
+
+:root {
+  /* the whole page reads as ONE continuous LCD panel: same yellow-green
+     phosphor hue as the now-playing box's --lcd-bg (#aeba76), just a
+     dimmer shade of it out here, with the same dark-ink text color */
+  --green: #20260f;
+  --green-dim: rgba(32, 38, 15, .4);
+  --bg: #5c6647;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  height: 100%;
+  margin: 0;
+  background: #14160f;
+}
+body {
+  position: fixed;
+  inset: clamp(6px, 1.6vw, 14px);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--green);
+  font-family: 'VT323', monospace;
+  font-size: 20px;
+  overflow: hidden;
+  border-radius: clamp(10px, 2vw, 18px);
+  border: 3px solid #262920;
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .3),
+    inset 0 -10px 24px rgba(0, 0, 0, .25),
+    0 10px 30px rgba(0, 0, 0, .6);
+  /* one continuous screen: bright LCD phosphor tone up top where the
+     now-playing readout lives, easing down to the dimmer shade for the
+     browse list — a single surface, not two stacked panels */
+  background: linear-gradient(to bottom, #cfd6a8 0%, #aeba76 14%, #8b9763 32%, var(--bg) 55%, var(--bg) 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' fill='%23ffcf8a'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(to bottom, rgba(255, 210, 150, .1) 0px, rgba(255, 210, 150, .1) 1px, transparent 1px, transparent 3px);
+  opacity: .1;
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .55) 100%);
+}
+
+.app {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(12px, 3vh, 24px) clamp(14px, 4vw, 32px) 0;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: clamp(24px, 6vw, 40px);
+  letter-spacing: .08em;
+  text-shadow: 0 0 10px var(--green-dim);
+  line-height: 1.1;
+}
+.subtitle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: clamp(8px, 2vh, 16px);
+}
+.toggle-group { display: flex; gap: 6px; flex-shrink: 0; }
+.browser-toggle {
+  flex-shrink: 0;
+  font-size: clamp(11px, 2.8vw, 14px) !important;
+  padding: clamp(2px, 1vh, 4px) clamp(8px, 2vw, 12px) !important;
+  opacity: .55;
+}
+.browser-toggle.active { opacity: 1; background: rgba(35, 42, 26, .16) !important; }
+.browser-panel, .art-panel, .spectrum-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.browser-panel.hidden, .art-panel.hidden, .spectrum-panel.hidden { display: none; }
+
+.spectrum-panel { align-items: center; justify-content: center; padding-bottom: 12px; }
+.spectrum-frame {
+  width: 100%;
+  border: 2px solid var(--green);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  overflow: hidden;
+  line-height: 0;
+}
+#spectrumCanvas { display: block; width: 100%; height: auto; }
+
+.art-panel { align-items: center; justify-content: center; padding-bottom: 12px; }
+.art-frame {
+  position: relative;
+  width: min(92vw, 60vh, 420px);
+  aspect-ratio: 1 / 1;
+  cursor: pointer;
+  border: 2px solid var(--green);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+}
+#albumArtCanvas, #albumArtImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+#albumArtCanvas.hidden, #albumArtImg.hidden { display: none; }
+.art-caption {
+  margin-top: clamp(8px, 2vh, 14px);
+  font-size: clamp(13px, 3vw, 16px);
+  opacity: .7;
+  text-align: center;
+}
+
+.subtitle {
+  margin: 0;
+  opacity: .6;
+  font-size: clamp(12px, 2.6vw, 15px);
+  letter-spacing: .1em;
+}
+
+.controls-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: clamp(8px, 2vh, 16px);
+}
+
+input[type="text"] {
+  flex: 1;
+  background: transparent;
+  border: 2px solid var(--green-dim);
+  border-radius: 6px;
+  color: var(--green);
+  font-family: inherit;
+  font-size: clamp(15px, 3.6vw, 18px);
+  padding: clamp(6px, 1.6vh, 8px) 12px;
+  outline: none;
+  min-width: 0;
+}
+input[type="text"]:focus { border-color: var(--green); }
+input[type="text"]::placeholder { color: rgba(35, 42, 26, .4); }
+
+button {
+  background: rgba(35, 42, 26, .08);
+  border: 2px solid var(--green);
+  color: var(--green);
+  font-family: inherit;
+  font-size: clamp(15px, 3.6vw, 18px);
+  border-radius: 6px;
+  padding: clamp(6px, 1.6vh, 8px) clamp(10px, 3vw, 18px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover { background: rgba(35, 42, 26, .16); }
+button:active { transform: translateY(1px); }
+
+.status-line {
+  opacity: .65;
+  font-size: clamp(12px, 2.6vw, 15px);
+  margin-bottom: clamp(4px, 1vh, 8px);
+  min-height: 20px;
+}
+
+.track-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid rgba(35, 42, 26, .2);
+  padding-top: 4px;
+  padding-bottom: 12px;
+}
+.track-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: clamp(6px, 1.6vh, 8px) 6px;
+  border-bottom: 1px solid rgba(35, 42, 26, .12);
+  cursor: pointer;
+}
+.track-row:hover { background: rgba(35, 42, 26, .08); }
+.track-row.playing { background: rgba(35, 42, 26, .16); font-weight: bold; }
+.track-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(16px, 3.6vw, 20px); }
+.track-meta { opacity: .65; font-size: clamp(13px, 3vw, 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+
+/* ===== now-playing readout — same continuous screen as the rest of the
+   page (body's gradient shows through), just its own dark-ink typeface
+   region up top. No card border/shadow of its own anymore — one screen. ===== */
+.player {
+  flex-shrink: 0;
+  z-index: 1;
+  padding: clamp(10px, 2.5vh, 18px) clamp(14px, 4vw, 32px) clamp(10px, 2vh, 14px);
+}
+
+.lcd {
+  --lcd-ink: #20260f;
+  --lcd-ink-dim: rgba(32, 38, 15, .45);
+  max-width: 620px;
+  margin: 0 auto;
+  font-family: 'Silkscreen', monospace;
+  color: var(--lcd-ink);
+  padding: 4px 4px 8px;
+  position: relative;
+  overflow: hidden;
+}
+/* faint horizontal LCD pixel-row texture */
+.lcd::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, .05) 0 1px, transparent 1px 3px);
+}
+
+.lcd-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  letter-spacing: .12em;
+  opacity: .85;
+  margin-bottom: 8px;
+}
+.lcd-titlebar .dots {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  letter-spacing: .15em;
+  text-align: center;
+}
+.lcd-titlebar .icon { font-size: 14px; }
+
+.lcd-info { margin-bottom: 10px; }
+.lcd-title {
+  font-size: 22px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcd-sub {
+  font-size: 14px;
+  opacity: .8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* marquee ticker for titles too long to fit — scrolls into view, holds,
+   scrolls back, holds, loops. Only animates when JS measures real
+   overflow (.scrolling); otherwise it's a normal ellipsis-truncated line. */
+.marquee-wrap .marquee-text { display: inline-block; }
+.marquee-wrap.scrolling {
+  text-overflow: clip;
+}
+.marquee-wrap.scrolling .marquee-text {
+  animation: marquee-bounce var(--marquee-duration, 6s) ease-in-out infinite;
+}
+@keyframes marquee-bounce {
+  0%, 8%   { transform: translateX(0); }
+  45%, 55% { transform: translateX(var(--marquee-distance, 0px)); }
+  92%, 100% { transform: translateX(0); }
+}
+
+.lcd-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+.lcd-progress .tri { font-size: 13px; }
+.lcd-bar {
+  flex: 1;
+  height: 13px;
+  border: 2px solid var(--lcd-ink);
+  border-radius: 2px;
+  padding: 1px;
+  cursor: pointer;
+}
+.lcd-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: repeating-linear-gradient(to right, var(--lcd-ink) 0 2px, transparent 2px 4px);
+  /* fixed-size element revealed via clip-path instead of animating width —
+     resizing a repeating-gradient background every tick is what caused
+     the flicker on some browsers (Firefox/Linux in particular) */
+  clip-path: inset(0 100% 0 0);
+}
+
+.lcd-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  letter-spacing: .04em;
+}
+.lcd-eq { font-size: 12px; padding: 1px 5px; border: 2px solid var(--lcd-ink); border-radius: 2px; opacity: .85; }
+
+.lcd-controls {
+  display: flex;
+  justify-content: center;
+  gap: clamp(6px, 2.5vw, 18px);
+  margin-top: 12px;
+}
+.lcd-controls button {
+  font-family: 'Silkscreen', monospace;
+  background: linear-gradient(160deg, #d8dcb2, #9aa565);
+  color: var(--lcd-ink);
+  border: 2px solid #262920;
+  border-radius: 8px;
+  padding: clamp(6px, 1.8vw, 8px) clamp(6px, 2.6vw, 14px);
+  font-size: clamp(12px, 3.4vw, 16px);
+  cursor: pointer;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .5), 0 2px 4px rgba(0, 0, 0, .4);
+  text-shadow: none;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.lcd-controls button:hover { filter: brightness(1.08); }
+.lcd-controls button:active { transform: translateY(1px); box-shadow: none; }
+.lcd-controls #playPauseBtn { flex: 1.15; }
+.lcd-controls-secondary { margin-top: clamp(6px, 1.6vw, 10px); }
+.lcd-controls-secondary button {
+  font-size: clamp(11px, 3vw, 14px);
+  padding: clamp(4px, 1.4vw, 6px) clamp(6px, 2.6vw, 14px);
+  opacity: .85;
+}
+.lcd-controls-secondary button:disabled { opacity: .4; cursor: default; }
+
+.lcd-fs-toggle {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 15px !important;
+  cursor: pointer;
+  padding: 2px !important;
+  color: inherit;
+}
+
+/* ===== fullscreen LCD kiosk mode ===== */
+/* all sizes use clamp(min, vw-scaled, max) so this scales smoothly down
+   to small phones instead of overflowing at a fixed px size */
+/* .lcd-shell wraps .player + .app. Outside fullscreen it must not affect
+   layout at all, so it's taken out of the box tree entirely — .player and
+   .app stay direct flex children of body exactly as before. */
+.lcd-shell { display: contents; }
+
+/* In fullscreen, the shell becomes the ONE bordered/background card — a
+   single element, single border, single background — and .player/.app
+   underneath it are stripped of their own border/background so there is
+   only ever one box drawn, not two boxes styled to pretend to be one. */
+body.lcd-fullscreen { background: radial-gradient(ellipse at 50% 40%, #101a12 0%, var(--bg) 75%); }
+body.lcd-fullscreen .lcd-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: min(94vw, 820px);
+  align-self: center;
+  margin: min(4vh, 32px) auto min(3vh, 20px);
+  border-radius: clamp(14px, 3vw, 22px);
+  border: clamp(3px, .8vw, 5px) solid #262920;
+  background: linear-gradient(160deg, #cfd6a8, #b7c17e 12%, #aeba76 40%, #a2af68 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .35),
+    inset 0 -6px 14px rgba(0, 0, 0, .2),
+    0 10px 30px rgba(0, 0, 0, .6);
+  overflow: hidden;
+}
+/* the LCD pixel-row scanline texture is normally scoped to just the .lcd
+   readout — in fullscreen the shell is one continuous screen, so the
+   texture needs to cover the whole shell instead of just its top part */
+body.lcd-fullscreen .lcd::before { display: none; }
+body.lcd-fullscreen .lcd-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, .05) 0 1px, transparent 1px 3px);
+}
+body.lcd-fullscreen .player {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: clamp(16px, 4vw, 30px) clamp(16px, 5vw, 34px) clamp(10px, 2vw, 16px);
+}
+body.lcd-fullscreen .lcd {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+body.lcd-fullscreen .app {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  border-top: 1px solid rgba(38, 41, 32, .25);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  padding: clamp(8px, 2vw, 14px) clamp(16px, 5vw, 34px) clamp(18px, 4vw, 30px);
+}
+body.lcd-fullscreen .lcd-titlebar { font-size: clamp(12px, 3vw, 20px); margin-bottom: clamp(10px, 3vw, 18px); }
+body.lcd-fullscreen .lcd-info { margin-bottom: clamp(14px, 4vw, 22px); }
+body.lcd-fullscreen .lcd-title { font-size: clamp(17px, 4.5vw, 40px); }
+body.lcd-fullscreen .lcd-sub { font-size: clamp(13px, 3.6vw, 24px); }
+body.lcd-fullscreen .lcd-progress { margin: clamp(14px, 3.5vw, 22px) 0 clamp(12px, 3vw, 18px); }
+body.lcd-fullscreen .lcd-bar { height: clamp(11px, 2.6vw, 22px); }
+body.lcd-fullscreen .lcd-progress .tri { font-size: clamp(13px, 3vw, 22px); }
+body.lcd-fullscreen .lcd-bottom-row { font-size: clamp(12px, 3.4vw, 22px); flex-wrap: wrap; row-gap: 6px; }
+body.lcd-fullscreen .lcd-eq { font-size: clamp(11px, 2.6vw, 18px); padding: 1px clamp(4px, 1.5vw, 8px); }
+body.lcd-fullscreen .lcd-controls { margin-top: clamp(14px, 4vw, 26px); gap: clamp(6px, 3vw, 26px); }
+body.lcd-fullscreen .lcd-controls button {
+  font-size: clamp(12px, 3.4vw, 24px);
+  padding: clamp(6px, 1.8vw, 14px) clamp(8px, 2.6vw, 24px);
+}
+body.lcd-fullscreen .lcd-controls #playPauseBtn { min-width: clamp(56px, 14vw, 110px); }
+body.lcd-fullscreen .lcd-controls-secondary button { font-size: clamp(11px, 2.6vw, 16px); }
+
+body.lcd-fullscreen .subtitle-row {
+  margin-bottom: clamp(10px, 2.5vh, 18px);
+  padding-top: clamp(8px, 2vh, 14px);
+}
+body.lcd-fullscreen .subtitle { font-size: clamp(13px, 2.8vw, 17px); }
+body.lcd-fullscreen .browser-toggle {
+  font-size: clamp(12px, 2.6vw, 16px) !important;
+  padding: clamp(4px, 1.2vh, 6px) clamp(10px, 2.4vw, 16px) !important;
+}
+body.lcd-fullscreen input[type="text"],
+body.lcd-fullscreen button { font-size: clamp(15px, 2.6vw, 19px); }
+body.lcd-fullscreen .track-title { font-size: clamp(16px, 2.8vw, 21px); }
+body.lcd-fullscreen .track-meta { font-size: clamp(13px, 2.4vw, 17px); }
+body.lcd-fullscreen .art-frame { width: min(60vh, 46vw, 460px); }
+body.lcd-fullscreen .art-caption { font-size: clamp(14px, 2.6vw, 18px); }
+body.lcd-fullscreen .spectrum-frame { max-width: min(60vh, 46vw, 460px); margin: 0 auto; }
+
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(74, 255, 160, .3); border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div class="lcd-shell">
+<div class="player">
+  <div class="lcd">
+    <div class="lcd-titlebar">
+      <span class="icon">◄◄</span>
+      <span class="dots">CURRENT TRACK</span>
+      <button class="lcd-fs-toggle" id="fsToggle" title="Fullscreen">⛶</button>
+    </div>
+    <div class="lcd-info">
+      <div class="lcd-title marquee-wrap" id="nowTitleWrap"><span class="marquee-text" id="nowTitle">Nothing playing</span></div>
+      <div class="lcd-sub marquee-wrap" id="nowArtistWrap"><span class="marquee-text" id="nowArtist">—</span></div>
+      <div class="lcd-sub marquee-wrap" id="nowAlbumWrap"><span class="marquee-text" id="nowAlbum">—</span></div>
+    </div>
+    <div class="lcd-progress">
+      <span class="tri">▶</span>
+      <div class="lcd-bar" id="seekBar"><div class="lcd-bar-fill" id="seekFill"></div></div>
+    </div>
+    <div class="lcd-bottom-row">
+      <span id="trackIndexLabel">01</span>
+      <span id="curTime">0:00</span>
+      <span class="lcd-eq">EQ</span>
+      <span id="durTime">0:00</span>
+    </div>
+    <div class="lcd-controls">
+      <button id="prevBtn">⏮ PREV</button>
+      <button id="playPauseBtn">▶ PLAY</button>
+      <button id="nextBtn">NEXT ⏭</button>
+    </div>
+    <div class="lcd-controls lcd-controls-secondary">
+      <button id="playAlbumBtn">▶ PLAY ALBUM</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="subtitle-row">
+    <div class="subtitle" id="libcount">CONNECTING...</div>
+    <div class="toggle-group">
+      <button class="browser-toggle active" id="browserToggle" title="Show/hide track browser">▲ LIST</button>
+      <button class="browser-toggle" id="artToggle" title="Show/hide album art">▼ ART</button>
+      <button class="browser-toggle" id="spectrumToggle" title="Show/hide spectrum analyzer">▼ EQ</button>
+    </div>
+  </div>
+
+  <div class="browser-panel" id="browserPanel">
+    <div class="controls-row">
+      <input type="text" id="search" placeholder="search title, artist, or album...">
+      <button id="shuffleBtn">SHUFFLE</button>
+    </div>
+    <div class="status-line" id="status"></div>
+
+    <div class="track-list" id="trackList"></div>
+  </div>
+
+  <div class="art-panel hidden" id="artPanel">
+    <div class="art-frame" id="artFrame" title="Click to toggle stylized / stock">
+      <canvas id="albumArtCanvas"></canvas>
+      <img id="albumArtImg" alt="" class="hidden">
+    </div>
+    <div class="art-caption" id="artCaption">—</div>
+  </div>
+
+  <div class="spectrum-panel hidden" id="spectrumPanel">
+    <div class="spectrum-frame" id="spectrumFrame">
+      <canvas id="spectrumCanvas"></canvas>
+    </div>
+    <div class="art-caption">SPECTRUM ANALYZER</div>
+  </div>
+</div>
+</div>
+
+<audio id="audio"></audio>
+
+<script>
+const els = {
+  libcount: document.getElementById('libcount'),
+  browserToggle: document.getElementById('browserToggle'),
+  browserPanel: document.getElementById('browserPanel'),
+  artToggle: document.getElementById('artToggle'),
+  spectrumToggle: document.getElementById('spectrumToggle'),
+  spectrumPanel: document.getElementById('spectrumPanel'),
+  spectrumFrame: document.getElementById('spectrumFrame'),
+  spectrumCanvas: document.getElementById('spectrumCanvas'),
+  artPanel: document.getElementById('artPanel'),
+  artFrame: document.getElementById('artFrame'),
+  albumArtCanvas: document.getElementById('albumArtCanvas'),
+  albumArtImg: document.getElementById('albumArtImg'),
+  artCaption: document.getElementById('artCaption'),
+  status: document.getElementById('status'),
+  search: document.getElementById('search'),
+  shuffleBtn: document.getElementById('shuffleBtn'),
+  trackList: document.getElementById('trackList'),
+  audio: document.getElementById('audio'),
+  nowTitle: document.getElementById('nowTitle'),
+  nowArtist: document.getElementById('nowArtist'),
+  nowAlbum: document.getElementById('nowAlbum'),
+  nowTitleWrap: document.getElementById('nowTitleWrap'),
+  nowArtistWrap: document.getElementById('nowArtistWrap'),
+  nowAlbumWrap: document.getElementById('nowAlbumWrap'),
+  playPauseBtn: document.getElementById('playPauseBtn'),
+  prevBtn: document.getElementById('prevBtn'),
+  nextBtn: document.getElementById('nextBtn'),
+  curTime: document.getElementById('curTime'),
+  durTime: document.getElementById('durTime'),
+  seekBar: document.getElementById('seekBar'),
+  seekFill: document.getElementById('seekFill'),
+  trackIndexLabel: document.getElementById('trackIndexLabel'),
+  playAlbumBtn: document.getElementById('playAlbumBtn'),
+};
+
+let currentTracks = [];
+let currentIndex = -1;
+let albumMode = false; // true while playing straight through a single album
+
+function fmtTime(sec) {
+  if (!isFinite(sec)) return '0:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function trackRow(t) {
+  const row = document.createElement('div');
+  row.className = 'track-row';
+  row.dataset.key = t.key;
+  const title = document.createElement('div');
+  title.className = 'track-title';
+  title.textContent = t.title;
+  const meta = document.createElement('div');
+  meta.className = 'track-meta';
+  meta.textContent = `${t.artist} — ${t.album}`;
+  row.appendChild(title);
+  row.appendChild(meta);
+  row.addEventListener('click', () => {
+    const idx = currentTracks.findIndex(x => x.key === t.key);
+    playTrackAt(idx >= 0 ? idx : 0);
+  });
+  return row;
+}
+
+function renderTracks(tracks) {
+  currentTracks = tracks;
+  els.trackList.innerHTML = '';
+  tracks.forEach(t => els.trackList.appendChild(trackRow(t)));
+}
+
+async function loadBrowse() {
+  albumMode = false;
+  els.status.textContent = 'Loading...';
+  const res = await fetch('/api/browse');
+  const data = await res.json();
+  renderTracks(data.tracks);
+  els.status.textContent = `Showing a random slice of your library — search to find something specific`;
+}
+
+async function doSearch(q) {
+  if (!q) return loadBrowse();
+  albumMode = false;
+  els.status.textContent = 'Searching...';
+  const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+  const data = await res.json();
+  renderTracks(data.tracks);
+  els.status.textContent = `${data.tracks.length} result(s) for "${q}"`;
+}
+
+async function playAlbumFromCurrent() {
+  const t = currentTracks[currentIndex];
+  if (!t || !t.album_key) { els.status.textContent = "Can't tell what album this track is from"; return; }
+  els.status.textContent = `Loading "${t.album}"...`;
+  const res = await fetch('/api/album?key=' + encodeURIComponent(t.album_key));
+  const data = await res.json();
+  if (!data.tracks || !data.tracks.length) { els.status.textContent = 'Could not load that album'; return; }
+  albumMode = true;
+  renderTracks(data.tracks);
+  els.status.textContent = `Playing "${t.album}" from track 1`;
+  playTrackAt(0);
+}
+
+function playTrackAt(index) {
+  const t = currentTracks[index];
+  if (!t) return;
+  currentIndex = index;
+
+  document.querySelectorAll('.track-row.playing').forEach(r => r.classList.remove('playing'));
+  const row = els.trackList.querySelector(`[data-key="${CSS.escape(t.key)}"]`);
+  if (row) { row.classList.add('playing'); row.scrollIntoView({ block: 'nearest' }); }
+
+  if (!t.stream_url) { els.status.textContent = 'No playable file for this track'; return; }
+  els.audio.src = t.stream_url;
+  els.audio.play();
+  els.nowTitle.textContent = t.title;
+  els.nowArtist.textContent = t.artist || '—';
+  els.nowAlbum.textContent = t.album || '—';
+  els.trackIndexLabel.textContent = String(index + 1).padStart(2, '0');
+  els.playPauseBtn.textContent = '❚❚ PAUSE';
+
+  currentArtUrl = t.art_url || null;
+  els.albumArtImg.src = currentArtUrl || '';
+  els.artCaption.textContent = currentArtUrl ? `${t.title} — ${t.album}` : 'No artwork for this track';
+  els.artFrame.style.visibility = currentArtUrl ? 'visible' : 'hidden';
+  renderLcdArt(currentArtUrl);
+
+  [els.nowTitleWrap, els.nowArtistWrap, els.nowAlbumWrap].forEach(setupMarquee);
+}
+
+// ---- LCD-style album art: quantize to the screen's own ink/bg colors on
+// a chunky pixel grid, like a real low-res dot-matrix display ----
+let currentArtUrl = null;
+let artStyleMode = 'mono'; // 'mono' or 'color', toggled by clicking the art
+
+function renderLcdArt(url) {
+  // the frame is a fixed square now (CSS aspect-ratio: 1/1), so render
+  // into that same square with contain-fit letterboxing — matches
+  // exactly how the real <img> sits in the same box via object-fit,
+  // so toggling between them never changes the frame's size
+  const frameSize = els.artFrame.clientWidth || 320;
+  els.albumArtCanvas.width = frameSize;
+  els.albumArtCanvas.height = frameSize;
+  const canvasCtx = els.albumArtCanvas.getContext('2d');
+  const bgColor = 'rgb(174, 186, 118)';
+  canvasCtx.fillStyle = bgColor;
+  canvasCtx.fillRect(0, 0, frameSize, frameSize);
+  if (!url) return;
+
+  const img = new Image();
+  img.onload = () => {
+    const gridSize = 140;
+    const tiny = document.createElement('canvas');
+    tiny.width = gridSize;
+    tiny.height = gridSize;
+    const tctx = tiny.getContext('2d');
+    tctx.fillStyle = bgColor;
+    tctx.fillRect(0, 0, gridSize, gridSize);
+
+    const scale = Math.min(gridSize / img.width, gridSize / img.height);
+    const dw = img.width * scale, dh = img.height * scale;
+    const dx = (gridSize - dw) / 2, dy = (gridSize - dh) / 2;
+    tctx.drawImage(img, dx, dy, dw, dh);
+
+    const data = tctx.getImageData(0, 0, gridSize, gridSize);
+    const ink = [32, 38, 15];    // var(--lcd-ink) #20260f
+    const bg = [174, 186, 118];  // the LCD screen's own background tone
+    const levels = 5;
+    for (let i = 0; i < data.data.length; i += 4) {
+      const r = data.data[i], g = data.data[i + 1], b = data.data[i + 2];
+      let lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      lum = Math.round(lum * (levels - 1)) / (levels - 1);
+      data.data[i] = ink[0] + (bg[0] - ink[0]) * lum;
+      data.data[i + 1] = ink[1] + (bg[1] - ink[1]) * lum;
+      data.data[i + 2] = ink[2] + (bg[2] - ink[2]) * lum;
+    }
+    tctx.putImageData(data, 0, 0);
+
+    canvasCtx.imageSmoothingEnabled = false;
+    canvasCtx.drawImage(tiny, 0, 0, frameSize, frameSize);
+  };
+  img.src = url;
+}
+
+function updateArtStyleVisibility() {
+  els.albumArtCanvas.classList.toggle('hidden', artStyleMode !== 'mono');
+  els.albumArtImg.classList.toggle('hidden', artStyleMode !== 'color');
+}
+els.artFrame.addEventListener('click', () => {
+  artStyleMode = artStyleMode === 'mono' ? 'color' : 'mono';
+  updateArtStyleVisibility();
+});
+updateArtStyleVisibility();
+
+// measures real overflow and only turns on the scrolling animation when
+// the text actually doesn't fit — short titles just sit still
+function setupMarquee(wrap) {
+  wrap.classList.remove('scrolling');
+  wrap.style.removeProperty('--marquee-distance');
+  wrap.style.removeProperty('--marquee-duration');
+  requestAnimationFrame(() => {
+    const textEl = wrap.querySelector('.marquee-text');
+    const overflow = textEl.scrollWidth - wrap.clientWidth;
+    if (overflow > 4) {
+      wrap.style.setProperty('--marquee-distance', `${-overflow}px`);
+      wrap.style.setProperty('--marquee-duration', `${Math.max(4, overflow / 35)}s`);
+      wrap.classList.add('scrolling');
+    }
+  });
+}
+
+window.addEventListener('resize', () => {
+  [els.nowTitleWrap, els.nowArtistWrap, els.nowAlbumWrap].forEach(setupMarquee);
+  renderLcdArt(currentArtUrl);
+});
+
+function nextTrack() {
+  if (currentTracks.length === 0) return shuffleAndPlay();
+  if (albumMode) {
+    if (currentIndex + 1 >= currentTracks.length) {
+      // [bigbuddy copy] owner 2026-10-01: album finished -> back to shuffling the whole library
+      albumMode = false;
+      els.status.textContent = 'End of album - back to shuffle';
+      return shuffleAndPlay();
+    }
+    playTrackAt(currentIndex + 1);
+    return;
+  }
+  playTrackAt((currentIndex + 1) % currentTracks.length);
+}
+function prevTrack() {
+  if (currentTracks.length === 0) return shuffleAndPlay();
+  if (albumMode) {
+    playTrackAt(Math.max(0, currentIndex - 1));
+    return;
+  }
+  playTrackAt((currentIndex - 1 + currentTracks.length) % currentTracks.length);
+}
+
+async function shuffleAndPlay() {
+  // play a random spot in the SAME freshly-loaded list, rather than
+  // splicing an unrelated single pick onto the front of a different
+  // list — that mismatch is what caused "same artist right after
+  // shuffle" when skipping forward
+  els.status.textContent = 'Picking something...';
+  await loadBrowse();
+  if (currentTracks.length > 0) {
+    playTrackAt(Math.floor(Math.random() * currentTracks.length));
+  }
+}
+
+els.playPauseBtn.addEventListener('click', () => {
+  if (els.audio.paused) { els.audio.play(); els.playPauseBtn.textContent = '❚❚ PAUSE'; }
+  else { els.audio.pause(); els.playPauseBtn.textContent = '▶ PLAY'; }
+});
+els.prevBtn.addEventListener('click', prevTrack);
+els.nextBtn.addEventListener('click', nextTrack);
+els.playAlbumBtn.addEventListener('click', playAlbumFromCurrent);
+
+els.audio.addEventListener('timeupdate', () => {
+  els.curTime.textContent = fmtTime(els.audio.currentTime);
+  els.durTime.textContent = fmtTime(els.audio.duration);
+  const pct = els.audio.duration ? (els.audio.currentTime / els.audio.duration) * 100 : 0;
+  els.seekFill.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+});
+els.seekBar.addEventListener('click', (e) => {
+  if (!els.audio.duration) return;
+  const rect = els.seekBar.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+  els.audio.currentTime = ratio * els.audio.duration;
+});
+els.audio.addEventListener('ended', () => nextTrack());
+
+els.shuffleBtn.addEventListener('click', shuffleAndPlay);
+
+// only one of {browser, art} panel is ever shown at a time — clicking the
+// active one collapses down to just the LCD player, clicking the other
+// switches straight over
+let activePanel = 'browser';
+function showPanel(which) {
+  activePanel = (activePanel === which) ? 'none' : which;
+  els.browserPanel.classList.toggle('hidden', activePanel !== 'browser');
+  els.artPanel.classList.toggle('hidden', activePanel !== 'art');
+  els.spectrumPanel.classList.toggle('hidden', activePanel !== 'spectrum');
+  els.browserToggle.classList.toggle('active', activePanel === 'browser');
+  els.artToggle.classList.toggle('active', activePanel === 'art');
+  els.spectrumToggle.classList.toggle('active', activePanel === 'spectrum');
+  els.browserToggle.textContent = (activePanel === 'browser' ? '▲' : '▼') + ' LIST';
+  els.artToggle.textContent = (activePanel === 'art' ? '▲' : '▼') + ' ART';
+  els.spectrumToggle.textContent = (activePanel === 'spectrum' ? '▲' : '▼') + ' EQ';
+  if (activePanel === 'spectrum') {
+    ensureAudioGraph();
+    drawSpectrum();
+  }
+}
+els.browserToggle.addEventListener('click', () => showPanel('browser'));
+els.artToggle.addEventListener('click', () => showPanel('art'));
+els.spectrumToggle.addEventListener('click', () => showPanel('spectrum'));
+
+// ---- spectrum analyzer: routes the existing <audio> element through a
+// Web Audio AnalyserNode, drawn as chunky LED-segment bars to match the
+// rest of the screen's retro-hardware look ----
+let audioCtx = null;
+let analyser = null;
+let freqData = null;
+let audioGraphReady = false;
+
+function ensureAudioGraph() {
+  if (audioGraphReady) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return;
+  }
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioCtx.createMediaElementSource(els.audio);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 128;
+  analyser.smoothingTimeConstant = 0.75;
+  source.connect(analyser);
+  analyser.connect(audioCtx.destination); // keep audio actually audible
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  audioGraphReady = true;
+}
+
+function drawSpectrum() {
+  if (activePanel !== 'spectrum') return;
+  requestAnimationFrame(drawSpectrum);
+  if (!analyser) return;
+  analyser.getByteFrequencyData(freqData);
+
+  const cssW = els.spectrumFrame.clientWidth || 320;
+  // [bigbuddy copy] TV mode: fill the full-width bottom band instead of a 0.55 aspect box
+  const cssH = document.body.classList.contains('tv') && els.spectrumFrame.clientHeight
+    ? els.spectrumFrame.clientHeight : Math.round(cssW * 0.55);
+  if (els.spectrumCanvas.width !== cssW || els.spectrumCanvas.height !== cssH) {
+    els.spectrumCanvas.width = cssW;
+    els.spectrumCanvas.height = cssH;
+  }
+  const ctx = els.spectrumCanvas.getContext('2d');
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const barCount = 24;
+  const barGap = Math.max(2, cssW * 0.008);
+  const barW = (cssW - barGap * (barCount + 1)) / barCount;
+  const segH = Math.max(4, cssH * 0.035);
+  const segGap = Math.max(2, segH * 0.35);
+  const maxSegments = Math.floor(cssH / (segH + segGap));
+
+  for (let i = 0; i < barCount; i++) {
+    // weight toward lower/mid frequencies, which read as more "musical"
+    // than a flat linear spread across the full spectrum
+    const binIndex = Math.min(freqData.length - 1, Math.floor(Math.pow(i / barCount, 1.6) * freqData.length * 0.85));
+    const val = freqData[binIndex] / 255;
+    const segments = Math.round(val * maxSegments);
+    const x = barGap + i * (barW + barGap);
+    for (let s = 0; s < segments; s++) {
+      const y = cssH - (s + 1) * (segH + segGap);
+      const heat = s / maxSegments;
+      const alpha = 0.55 + heat * 0.45; // top segments read slightly bolder
+      ctx.fillStyle = `rgba(32, 38, 15, ${alpha})`;
+      ctx.fillRect(x, y, barW, segH);
+    }
+  }
+}
+
+// fullscreen LCD kiosk mode
+const fsToggle = document.getElementById('fsToggle');
+function setLcdFullscreen(on) {
+  document.body.classList.toggle('lcd-fullscreen', on);
+  fsToggle.textContent = on ? '✕' : '⛶';
+  if (on && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else if (!on && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  setTimeout(() => {
+    [els.nowTitleWrap, els.nowArtistWrap, els.nowAlbumWrap].forEach(setupMarquee);
+    renderLcdArt(currentArtUrl);
+  }, 50);
+}
+fsToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setLcdFullscreen(!document.body.classList.contains('lcd-fullscreen'));
+});
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) document.body.classList.remove('lcd-fullscreen');
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setLcdFullscreen(false);
+});
+
+let searchTimer;
+els.search.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = els.search.value.trim();
+  searchTimer = setTimeout(() => doSearch(q), 350);
+});
+
+(async function init() {
+  try {
+    const res = await fetch('/api/init');
+    const data = await res.json();
+    els.libcount.textContent = `${data.total_tracks.toLocaleString()} TRACKS ONLINE`;
+    loadBrowse();
+  } catch (e) {
+    els.libcount.textContent = 'COULD NOT REACH PLEX';
+    els.status.textContent = e.message;
+  }
+})();
+</script>
+
+<!-- ===== [bigbuddy copy] TV layout + Buddy remote control ===== -->
+<style>html.cursor-idle, html.cursor-idle * { cursor: none !important; }</style>
+<script>
+// [bigbuddy copy] hide the pointer after 3 s without movement; any movement brings it back
+(() => { let t; const wake = () => { document.documentElement.classList.remove('cursor-idle'); clearTimeout(t);
+  t = setTimeout(() => document.documentElement.classList.add('cursor-idle'), 3000); };
+  ['mousemove', 'mousedown', 'wheel', 'keydown'].forEach(e => addEventListener(e, wake, { passive: true })); wake(); })();
+</script>
+<style>
+/* TV: top 2/3 = LCD | track list | art; bottom 1/3 = full-width spectrum */
+body.tv { display: grid; height: 100vh; overflow: hidden; box-sizing: border-box; padding: 2vh 2vw;
+          grid-template-columns: minmax(460px, 32vw) 1fr 1fr; grid-template-rows: auto 1fr 32vh; gap: 2vh 2vw; }
+body.tv .app { display: contents; }
+body.tv .player { grid-column: 1; grid-row: 1 / 3; align-self: center; padding: 0; zoom: 1.5; }
+body.tv .lcd { max-width: none; }
+body.tv .subtitle-row { grid-column: 2 / 4; grid-row: 1; }
+body.tv .toggle-group { display: none; }
+body.tv .browser-panel, body.tv .browser-panel.hidden { grid-column: 2; grid-row: 2; display: flex;
+               flex-direction: column; min-height: 0; }
+body.tv .track-list { flex: 1; min-height: 0; overflow-y: auto; }
+body.tv .art-panel, body.tv .art-panel.hidden { grid-column: 3; grid-row: 2; display: flex; flex-direction: column;
+               min-height: 0; align-items: center; justify-content: center; }
+body.tv .art-frame { max-width: none; width: min(100%, 44vh); }
+body.tv .spectrum-panel, body.tv .spectrum-panel.hidden { grid-column: 1 / 4; grid-row: 3; display: flex;
+               flex-direction: column; min-height: 0; }
+body.tv .spectrum-frame { max-width: none; width: 100%; flex: 1; min-height: 0; }
+body.tv .spectrum-frame canvas { width: 100%; height: 100%; display: block; }
+</style>
+<script>
+(() => {
+  const tvQuery = matchMedia('(min-width: 1200px) and (min-aspect-ratio: 4/3)');
+  const applyTv = () => {
+    const tv = tvQuery.matches || new URLSearchParams(location.search).has('tv');
+    document.body.classList.toggle('tv', tv);
+  };
+  applyTv(); tvQuery.addEventListener('change', applyTv);
+
+  let spectrumOn = false;
+  const startSpectrum = () => {
+    if (spectrumOn || !document.body.classList.contains('tv')) return;
+    // drawSpectrum() only loops while activePanel === 'spectrum'; in TV mode all panels are visible
+    try { activePanel = 'spectrum'; ensureAudioGraph(); drawSpectrum(); spectrumOn = true; } catch (e) {}
+  };
+  els.audio.addEventListener('play', startSpectrum);
+
+  let last = null, boot = null;
+  async function run(c) {
+    const a = els.audio;
+    if (c.cmd === 'play' && c.arg) {
+      await doSearch(c.arg);
+      if (currentTracks.length) playTrackAt(0);
+    } else if (c.cmd === 'shuffle') await shuffleAndPlay();
+    else if (c.cmd === 'album') await playAlbumFromCurrent();   // [bigbuddy copy] current song's album from track 1
+    else if (c.cmd === 'pause') a.pause();
+    else if (c.cmd === 'resume') await a.play();
+    else if (c.cmd === 'next') nextTrack();
+    else if (c.cmd === 'prev') prevTrack();
+    else if (c.cmd === 'stop') { a.pause(); a.currentTime = 0; }
+    else if (c.cmd === 'fullscreen') setLcdFullscreen(!!(c.arg && c.arg.on));   // the jukebox's own LCD fullscreen
+  }
+  async function poll() {
+    try {
+      const r = await (await fetch('/api/remote/poll?after=' + (last ?? 0))).json();
+      if (boot !== null && r.boot !== boot) last = 0;      // container restarted: its counter restarted at 0
+      boot = r.boot;
+      if (last === null) last = r.last;                 // ignore commands queued before this page loaded
+      else for (const c of r.cmds) { last = c.id; try { await run(c); } catch (e) { console.warn('remote', e); } }
+    } catch (e) {}
+    setTimeout(poll, 700);
+  }
+  poll();
+
+  function report() {
+    const t = currentTracks[currentIndex] || {};
+    fetch('/api/remote/state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: t.title || null, artist: t.artist || null, album: t.album || null,
+                             playing: !els.audio.paused, position: els.audio.currentTime || 0 }) }).catch(() => {});
+  }
+  ['play', 'pause', 'ended'].forEach(ev => els.audio.addEventListener(ev, report));
+  setInterval(report, 5000);
+})();
+</script>
+<script src="http://127.0.0.1:8290/overlay.js"></script><!-- [bigbuddy copy] Buddy corner face -->
+</body>
+</html>

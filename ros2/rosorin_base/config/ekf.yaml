@@ -1,0 +1,32 @@
+# robot_localization EKF: odom -> base_link. 2D.
+# Inputs: wheel/odom twist (vx, vy) = gated COMMANDED velocity (no wheel encoders on this board),
+#         imu/data_raw gyro z (yaw rate). Commanded yaw rate is not fused: the gyro measures it.
+# Absolute drift correction (map -> odom) comes later from scan matching / SLAM.
+ekf_filter_node:
+  ros__parameters:
+    frequency: 50.0
+    two_d_mode: true
+    publish_tf: true
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom
+
+    # Verified nav baseline (docs/navigation.md, 2026-09-28): wheel/odom = gated commanded velocity, AMCL corrects drift.
+    # 2026-09-30 a switch to LiDAR odometry (odom_lidar from rf2o_fix) was REVERTED (owner): not yet proven in isolation.
+    # rf2o + rf2o_fix still run in base.launch and publish odom_lidar, but nothing consumes it until it is verified.
+    odom0: wheel/odom
+    #            x      y      z      roll   pitch  yaw
+    #            vx     vy     vz     vroll  vpitch vyaw
+    #            ax     ay     az
+    odom0_config: [false, false, false, false, false, false,
+                   true,  true,  false, false, false, false,
+                   false, false, false]
+    odom0_differential: false
+
+    imu0: imu/data_raw
+    imu0_config: [false, false, false, false, false, false,
+                  false, false, false, false, false, true,
+                  false, false, false]
+    imu0_differential: false
+    imu0_remove_gravitational_acceleration: false

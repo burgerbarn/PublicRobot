@@ -1,0 +1,55 @@
+# nav2_collision_monitor 1.1.20 params/collision_monitor_params.yaml (apt) with ROSOrin changes:
+# base_link, no sim time, input = velocity_smoother output, polygons sized to the chassis
+# (x -0.15..0.155, y -0.115..0.12), no pointcloud source. Final stage before board_driver: the ONLY
+# cmd_vel publisher. Added after the 2026-09-28 Nav2 collision (docs/navigation.md).
+collision_monitor:
+  ros__parameters:
+    use_sim_time: False
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+    cmd_vel_in_topic: "cmd_vel_smoothed"
+    cmd_vel_out_topic: "cmd_vel"
+    transform_tolerance: 0.5
+    # Humble (1.1.20): a scan older than this is IGNORED - the monitor then has no points and passes the command
+    # through unchanged (measured 2026-10-02, scripts/tests/nav2_isolated_checks.sh: wall at the nose, scan silent
+    # -> 0.2 m/s out). "Stop when the source is silent" exists only from Jazzy. The stop for a silent LiDAR is the
+    # base driver's scan gate (board_driver scan_timeout 0.5 s).
+    source_timeout: 1.0
+    base_shift_correction: True
+    stop_pub_timeout: 2.0
+    polygons: ["FootprintApproach", "PolygonSlow"]
+    # owner 2026-10-01: the stop polygon froze the robot facing a closed door (it blocks ALL motion, turning away
+    # too; no reverse in the BT). Approach (Nav2 native) only limits motion that would reach contact within
+    # time_before_collision, so turning/strafing away stays possible.
+    # AS IT RUNS on Humble (measured 2026-10-02 + polygon.cpp): an approach polygon does not use `points`. It takes
+    # the footprint the local costmap publishes (local_costmap/published_footprint = nav2.yaml footprint +
+    # footprint_padding 0.01), i.e. chassis + 1 cm, NOT the + 3 cm written here on 2026-10-01; and with no local
+    # costmap running it has no polygon at all. `points` is kept only as the record of that intent. To get 3 cm the
+    # knob is the local costmap's footprint_padding (it also widens what the controller keeps clear).
+    # One return inside the footprint stops ALL axes (static check, >= max_points); the look-ahead and the slowdown
+    # zone need TWO returns (> max_points). max_points 0 would never move.
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      points: [0.185, 0.15, 0.185, -0.145, -0.18, -0.145, -0.18, 0.15]
+      time_before_collision: 1.2
+      simulation_time_step: 0.1
+      max_points: 1                # Humble: points ALLOWED before acting
+      visualize: True
+      polygon_pub_topic: "polygon_approach"
+      enabled: True
+    PolygonSlow:                 # front +0.25 m, sides +0.08 m, 60 % (owner 2026-10-01: "way too conservative" -
+                                 # was +0.45/+0.20 at 40 %: every in-place spin near a wall ran at 0.4 rad/s)
+      type: "polygon"
+      points: [0.405, 0.20, 0.405, -0.195, -0.10, -0.195, -0.10, 0.20]
+      action_type: "slowdown"
+      max_points: 1                # Humble: points ALLOWED before acting; 3 let a 3-point object pass (tested)
+      slowdown_ratio: 0.6
+      visualize: True
+      polygon_pub_topic: "polygon_slowdown"
+      enabled: True
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "/scan"
+      enabled: True

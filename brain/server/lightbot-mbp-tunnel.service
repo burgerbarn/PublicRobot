@@ -1,0 +1,11 @@
+[Unit]
+Description=SSH tunnel bigbuddy 127.0.0.1:8085 -> MacBook M4 Max LM Studio 127.0.0.1:1234 (loaned; retries while the laptop is away)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=10 -L 127.0.0.1:8085:127.0.0.1:1234 mbp
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

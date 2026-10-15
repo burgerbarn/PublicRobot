@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Simulated rebuild: run commands as root on the simulated robot (docker exec, the container's normal admin channel).
+# Why: in the simulation every arm64 program runs through bigbuddy's qemu-user (binfmt flags F, no C), so setuid
+# programs (sudo, su) cannot become root. A chapter's `sudo <cmd>` is run through this instead; sudo's own behaviour
+# (password prompt, NOPASSWD effect) is not testable here. Commands come on stdin; a login shell as root.
+# Usage (Mac):  scripts/sim/robot_root <<'EOF2'
+#               ...
+#               EOF2
+exec ssh bigbuddy "docker exec -i -u root -e QEMU_UNAME=5.15.148-tegra -w /root lbsim-robot bash -l"

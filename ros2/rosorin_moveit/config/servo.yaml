@@ -1,0 +1,33 @@
+# MoveIt Servo (humble) for smooth, continuous arm motion (attention/tracking). Output: 25 Hz single-point
+# JointTrajectory on /arm_controller/joint_trajectory -> board_driver follower (limits + arm-model veto + speed cap).
+use_gazebo: false
+status_topic: ~/status
+command_in_type: speed_units          # JointJog velocities in rad/s
+scale: {linear: 0.2, rotational: 0.8, joint: 1.0}
+publish_period: 0.04                  # 25 Hz = driver streaming rate
+low_latency_mode: false
+command_out_type: trajectory_msgs/JointTrajectory
+publish_joint_positions: true
+publish_joint_velocities: false
+publish_joint_accelerations: false
+smoothing_filter_plugin_name: online_signal_smoothing::ButterworthFilterPlugin
+is_primary_planning_scene_monitor: false     # move_group owns the scene (incl. the depth octomap)
+monitored_planning_scene_topic: /monitored_planning_scene
+move_group_name: arm
+planning_frame: base_link
+ee_frame_name: camera_link
+robot_link_command_frame: base_link
+incoming_command_timeout: 0.2
+num_outgoing_halt_msgs_to_publish: 4
+lower_singularity_threshold: 17.0
+hard_stop_singularity_threshold: 30.0
+leaving_singularity_threshold_multiplier: 2.0
+joint_limit_margin: 0.01               # rest pose is 0.02 rad from the joint-3 limit; driver enforces real limits
+cartesian_command_in_topic: ~/delta_twist_cmds
+joint_command_in_topic: ~/delta_joint_cmds
+joint_topic: /joint_states
+command_out_topic: /arm_controller/joint_trajectory
+check_collisions: true
+collision_check_rate: 10.0
+self_collision_proximity_threshold: 0.005   # = padding; 0.01 froze the coiled rest pose
+scene_collision_proximity_threshold: 0.01

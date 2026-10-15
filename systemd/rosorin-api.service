@@ -1,0 +1,14 @@
+[Unit]
+Description=ROSOrin robot API for Buddy (state, objects, frame, look - arm only) on :8296
+After=network-online.target rosorin-base.service rosorin-camera.service
+Wants=network-online.target
+
+[Service]
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && source /home/burgerbarn/vision/venv/bin/activate && exec python /home/burgerbarn/buddy_link/robot_api.py'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

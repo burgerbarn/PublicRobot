@@ -1,0 +1,18 @@
+# BUDDY VIDEO copy (frame off by default, per-style effect strength, remote control for Buddy).
+# Source: ~/media-apps/video (copied from server ~/openwebui-stack/video 2026-09-28). Local only.
+[Unit]
+Description=Buddy video (bigbuddy copy)
+
+[Container]
+Image=localhost/buddy-video:latest
+ContainerName=buddy-video
+PublishPort=127.0.0.1:8282:80
+EnvironmentFile=%h/media-apps/video.env
+Environment=PLEX_URL=http://192.168.1.122:32400
+Environment=PLEX_VIDEO_SECTIONS=1,2,3,20
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Simulated rebuild: the simulated robot body's true pose in the room (Gazebo ground truth), from the Mac.
+# Prints: x y yaw_deg   (map-aligned: the room is built from maps/room_20260928, same origin as the kept map)
+ssh bigbuddy "docker exec lbsim-gz bash -c 'source /opt/ros/humble/setup.bash; timeout 5 ign topic -e -t /world/room/dynamic_pose/info -n 1'" </dev/null \
+| python3 -c '
+import sys, re, math
+t = sys.stdin.read()
+m = re.search(r"name: \"rosorin\".*?position \{(.*?)\}.*?orientation \{(.*?)\}", t, re.S)
+if not m: sys.exit("no pose")
+num = lambda blk, k: float((re.search(k + r": (\S+)", blk) or [0, 0])[1])
+x, y = num(m.group(1), "x"), num(m.group(1), "y")
+qx, qy, qz, qw = (num(m.group(2), k) for k in ("x", "y", "z", "w"))
+qw = qw if re.search(r"w: ", m.group(2)) else 1.0
+yaw = math.degrees(math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)))
+print(f"{x:.3f} {y:.3f} {yaw:.1f}")'

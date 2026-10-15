@@ -1,0 +1,17 @@
+# nvblox (Isaac ROS 3.2) on the Aurora 930 depth: GPU 3D map -> 2D obstacle slice -> Nav2 costmaps (nvblox_layer).
+# Loaded after NVIDIA's stock nvblox_base.yaml (nav.launch.py); everything not listed here is NVIDIA's default.
+# TSDF decay stays STOCK (0.95 at 5 Hz): what the camera no longer sees is gone from the slice within ~14 s (p90
+# 13.8 s, max 21 s, replay of bag 20261002_121621). Slower or no decay was tested by replay on 2026-10-02 and
+# rejected: obstacle cells then stay on floor the robot itself drove over in 83-95 % of the snapshots (stock: 31-41 %).
+# Depth reaches nvblox through rosorin_base/depth_gate (only while the arm is still).
+/**:
+  ros__parameters:
+    global_frame: odom          # as in NVIDIA's reference setup; the costmap layer transforms to map itself
+    use_color: false
+    use_lidar: false            # the COIN-D6 is 2D; the LiDAR stays in Nav2's own layers
+    use_depth: true
+    esdf_slice_min_height: 0.03 # odom z = base_link height: from ~4.5 cm above the floor (rug stays floor)
+    esdf_slice_max_height: 0.6  # up to the top of the robot with the arm in the drive pose
+    esdf_slice_height: 0.3
+    integrate_depth_rate_hz: 10.0
+    map_clearing_radius_m: 6.0

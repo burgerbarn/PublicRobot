@@ -1,0 +1,19 @@
+{
+ "lightbot": {
+  "url": "http://localhost:1234",
+  "model": "google/gemma-4-12b"
+ },
+ "lightbot-coder": {
+  "url": "http://localhost:8081",
+  "model": "rosorin-coder",
+  "where": "XPS 14, Arc B390, llama.cpp Vulkan, via SSH tunnel"
+ },
+ "lightbot-oss": {
+  "url": "http://localhost:1234",
+  "model": "openai/gpt-oss-20b"
+ },
+ "lightbot-qwen30": {
+  "url": "http://localhost:1234",
+  "model": "qwen/qwen3-30b-a3b-2507"
+ }
+}

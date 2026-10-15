@@ -1,0 +1,66 @@
+{
+ "_comment": "What is normal until the robot has its own history (>= 30 healthy snapshots per value). Measured 2026-10-05 after the fixes of that day, robot standing, navigation ready, mind running. cpu = % of one core. The camera is watched through its small camera_info topic: a best-effort reader of the 768 kB image loses frames with the default 512 kB shared-memory segment (scripts/tests/dds_large_data.py) and would read a false low rate.",
+ "cpu": {
+  "mind": 65,
+  "contact_monitor": 45,
+  "rosorin_board_driver": 45,
+  "aurora": 45,
+  "vslam_odom": 40,
+  "nav_supervisor": 15,
+  "ekf_filter_node": 20,
+  "robot_state_publisher": 8,
+  "amcl": 20,
+  "controller_server": 25,
+  "planner_server": 20,
+  "bt_navigator": 20,
+  "behavior_server": 20,
+  "smoother_server": 15,
+  "collision_monitor": 15,
+  "nvblox_node": 30,
+  "rf2o_laser_odometry": 12,
+  "robot_api": 15,
+  "rosorin_lidar_reader": 12,
+  "depth_gate": 12
+ },
+ "cpu_default": 25,
+ "rates": {
+  "/scan": 10,
+  "/imu/data_raw": 106,
+  "/joint_states": 10,
+  "/wheel/odom": 50,
+  "/odometry/filtered": 45,
+  "/odom_vslam": 9,
+  "/tf": 60,
+  "/aurora/rgb/camera_info": 15
+ },
+ "owner": {
+  "/scan": "rosorin-base",
+  "/imu/data_raw": "rosorin-base",
+  "/joint_states": "rosorin-base",
+  "/wheel/odom": "rosorin-base",
+  "/odometry/filtered": "rosorin-base",
+  "/tf": "rosorin-base",
+  "/odom_vslam": "rosorin-vslam",
+  "/aurora/rgb/camera_info": "rosorin-camera"
+ },
+ "limits": {
+  "udp_packets_per_s": 8000,
+  "rcvbuf_errors_per_s": 20,
+  "load1": 18,
+  "temp_c": 88,
+  "disk_free_gb": 15,
+  "ram_avail_mb": 1200,
+  "battery_ask_v": 10.9,
+  "battery_urgent_v": 10.4,
+  "lost_min": 15
+ },
+ "units": [
+  "rosorin-base",
+  "rosorin-camera",
+  "rosorin-vslam",
+  "rosorin-contact",
+  "rosorin-api",
+  "rosorin-mind",
+  "rosorin-nav"
+ ]
+}

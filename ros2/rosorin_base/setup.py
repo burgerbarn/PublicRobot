@@ -1,0 +1,25 @@
+from setuptools import setup
+setup(
+    name='rosorin_base',
+    version='0.1.0',
+    packages=['rosorin_base'],
+    data_files=[
+        ('share/ament_index/resource_index/packages', ['resource/rosorin_base']),
+        ('share/rosorin_base', ['package.xml']),
+        ('share/rosorin_base/launch', ['launch/base.launch.py', 'launch/slam.launch.py', 'launch/nav.launch.py', 'launch/nav_slam.launch.py']),
+        ('share/rosorin_base/config', ['config/imu_calibration.yaml', 'config/arm_limits.yaml', 'config/ekf.yaml', 'config/slam.yaml', 'config/nav2.yaml', 'config/collision_monitor.yaml', 'config/robot_model.json', 'config/rf2o.yaml', 'config/nvblox.yaml', 'config/explore.yaml']),
+        ('share/rosorin_base/bt', ['bt/navigate_no_backup.xml']),
+        ('share/rosorin_base/urdf', ['urdf/rosorin.urdf']),
+    ],
+    install_requires=['setuptools'],
+    entry_points={'console_scripts': ['board_reader = rosorin_base.board_reader:main',
+                                      'lidar_reader = rosorin_base.lidar_reader:main',
+                                      'board_driver = rosorin_base.board_driver:main',
+                                      'stop_motors = rosorin_base.stop_motors:main',
+                                      'gamepad_teleop = rosorin_base.gamepad_teleop:main',
+                                      'rf2o_fix = rosorin_base.rf2o_fix:main',
+                                      'vslam_odom = rosorin_base.vslam_odom:main',
+                                      'depth_gate = rosorin_base.depth_gate:main',
+                                      'nav_supervisor = rosorin_base.nav_supervisor:main',
+                                      'nav_wait = rosorin_base.nav_supervisor:wait_main']},
+)

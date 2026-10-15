@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSOrin nav task %i (come | home | sethome) - behavior/come_here.py --%i
+After=rosorin-base.service
+Requires=rosorin-base.service
+
+[Service]
+Type=simple
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash /home/burgerbarn/setup/come_run.sh --%i
+ExecStopPost=/bin/bash -c 'source /opt/ros/humble/setup.bash && timeout 10 ros2 service call /rosorin_board_driver/enable std_srvs/srv/SetBool "{data: false}"'
+KillSignal=SIGINT
+TimeoutStopSec=30
+Restart=no
+# not enabled at boot: started by Buddy (robot_api POST /task/<mode>)

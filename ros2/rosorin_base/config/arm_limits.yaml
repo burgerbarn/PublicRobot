@@ -1,0 +1,53 @@
+# Arm servo limits (pulses) and speed cap. Mapped 2026-09-27 by gamepad-bounded sweeps (docs/motion_safety.md).
+# Per-joint limits are a union envelope; combinations are pose-dependent -> model path check + slow speed.
+# Previously: ±50 around the rest pose read 2026-09-27
+# (1=500, 2=724, 3=46, 4=149, 5=501, 10=499). Widen only after supervised jogging (motion_safety.md).
+rosorin_board_driver:
+  ros__parameters:
+    arm_max_speed: 250.0         # owner 2026-09-29: 50 -> 62.5 -> 125 -> 250 (ceiling 300); quintic: accel scales with speed^2
+    arm_jog_max_speed: 300.0     # owner 2026-10-01: head (JointJog) faster = the 300 ceiling (72 deg/s); goals stay 250
+    max_linear: 0.35             # wheels (board_driver motion gate; default 0.2): owner 2026-10-01 faster, accel unchanged 0.5 m/s^2
+    arm_limit_1: [34, 966]     # swept 2026-09-27: reach 14..986 both ways, unobstructed
+    arm_limit_2: [95, 941]     # union: from rest back 961 free, fwd owner stop 562 (joint 3 in the way); from straight-up back stop 927, fwd stop 75
+    arm_limit_3: [40, 881]     # straight-up: owner stops 66 / 901; lower kept at 40 so folded rest (44) stays reachable
+    arm_limit_4: [121, 935]    # straight-up: owner stops 101 / 955
+    arm_limit_5: [31, 969]     # rotates freely 11..989
+    arm_limit_10: [131, 631]   # claw: self-stops fully open 111 / fully closed 651 (margin keeps it off its own fingers)
+    # default pose (owner-designed 2026-09-27): S-coil, wrist camera ~11 deg below level, balanced over
+    # the base (model). Used by ~/arm/recover. Previous rest: 500/724/46/149/501/499 (folded)
+    # 2026-10-05 owner placed it by gamepad: "if you come out a little more past rest, the claw rotates freely" (in the
+    # S-coil the claw collides with the joint-2 servo). Camera 5 cm higher (0.38 m), level +5 deg at wrist 161; it can
+    # look down to -4 deg only (wrist limit 121), up as before. Read back: 500/776/211/161/492/499.
+    arm_rest_1: 500
+    arm_rest_2: 776
+    arm_rest_3: 211
+    arm_rest_4: 161
+    arm_rest_5: 500
+    arm_rest_10: 499
+    # fold pose = the S-coil that was the rest pose until 2026-10-05: the step between rest and tuck, both ways
+    # (the path tuck <-> S-coil is the one run daily since 09-27; wrist roll stays centred through it)
+    arm_fold_1: 500
+    arm_fold_2: 860
+    arm_fold_3: 45
+    arm_fold_4: 178
+    arm_fold_5: 500
+    arm_fold_10: 499
+    arm_recover_speed: 20.0
+    # tuck pose (owner, hand-set demonstration 2026-09-27): shoulder far back (980), elbow NOT folded (48),
+    # wrist 133: upper arm stands with its motor resting on the joint-2 servo. Torque off. Joint 2 servo's
+    # stored limit is 960 -> drive to 960, then release to settle onto the rest.
+    arm_tuck_1: 500
+    arm_tuck_2: 980
+    arm_tuck_3: 48
+    arm_tuck_4: 133
+    arm_tuck_5: 499
+    arm_tuck_10: 629
+    # drive pose (owner name), set by hand with torque off and recorded 2026-09-27 16:48 (photo
+    # ~/model/pose_recorded_164827.jpg). Inside all mapped limits -> reachable by streamed trajectories.
+    # Unverified: whether it holds itself (torque off) while driving.
+    arm_drive_1: 500
+    arm_drive_2: 793
+    arm_drive_3: 51
+    arm_drive_4: 160              # owner 2026-09-29 "see more floor": camera -29 deg, floor 0.32-4.2 m ahead (was 179 = -24.5)
+    arm_drive_5: 499
+    arm_drive_10: 499

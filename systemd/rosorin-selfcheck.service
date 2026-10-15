@@ -1,0 +1,13 @@
+[Unit]
+Description=ROSOrin self-care round: measure itself, fix what it may, ask for the rest (selfcare/self_check.py)
+After=rosorin-base.service
+
+[Service]
+Type=oneshot
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+# NOT idle scheduling: the first round at idle priority was starved, counted too few messages and restarted the
+# camera for nothing (2026-10-05). A round costs ~3 s of CPU; a measuring tool must get to run.
+Nice=5
+TimeoutStartSec=300
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && cd /home/burgerbarn/selfcare && exec python3 self_check.py'

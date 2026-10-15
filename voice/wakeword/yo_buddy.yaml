@@ -1,0 +1,29 @@
+# openWakeWord 0.6.0 train.py config for "yo buddy" (keys per openwakeword/train.py).
+# Positive/adversarial clips synthesized by Kokoro (kokoro_gen/generate_samples.py), not Piper.
+model_name: "yo_buddy"
+target_phrase: ["yo buddy"]
+custom_negative_phrases: ["hey buddy", "yo body", "you buddy", "yo bunny", "yeah buddy", "oh buddy", "buddy",
+                          "yo", "yo dude", "go buddy", "no buddy", "my buddy", "yo bro", "hi buddy", "yo baby"]
+n_samples: 20000
+n_samples_val: 2000
+tts_batch_size: 50
+augmentation_batch_size: 16
+piper_sample_generator_path: "/home/burgerbarn/voice/wakeword/kokoro_gen"
+output_dir: "/home/burgerbarn/voice/wakeword/work"
+rir_paths: ["/home/burgerbarn/voice/wakeword/data/rir"]
+# + real echo-cancelled music/movie residual from bigbuddy (2026-09-28), weighted x10
+background_paths: ["/home/burgerbarn/voice/wakeword/data/background", "/home/burgerbarn/voice/wakeword/data/background_aec"]
+background_paths_duplication_rate: [1, 10]
+false_positive_validation_data_path: "/home/burgerbarn/voice/wakeword/data/validation_set_features.npy"
+augmentation_rounds: 1
+feature_data_files:
+  "ACAV100M_sample": "/home/burgerbarn/voice/wakeword/data/openwakeword_features_ACAV100M_2000_hrs_16bit.npy"
+batch_n_per_class:
+  "ACAV100M_sample": 1024
+  "adversarial_negative": 50
+  "positive": 50
+model_type: "dnn"
+layer_size: 32
+steps: 50000
+max_negative_weight: 1500
+target_false_positives_per_hour: 0.2

@@ -1,0 +1,11 @@
+[Unit]
+Description=lightBot brain: retrieval-augmented OpenAI-compatible endpoint on 127.0.0.1:8300 (backend LM Studio :1234)
+After=network-online.target
+
+[Service]
+ExecStart=%h/llm-train/bin/python %h/llm-train/brain/brain_server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

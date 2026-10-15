@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Robot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Touchscreen robot panel (owner 2026-10-01): live camera, status, STOP / Come here / Go home / Look around.
+     Served by face_server at /robot; /robot/* relays to the robot API with its token (never sent to the page). -->
+<style>
+  :root { --bg: #050506; --panel: #101114; --line: #24262c; --fg: #ecece6; --dim: #8b8e96; --amber: #ffb020;
+          --green: #46ff8a; --red: #ff3b30; }
+  html, body { touch-action: none; overscroll-behavior: none; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden;
+               font: 500 20px/1.3 ui-monospace, "Share Tech Mono", monospace; user-select: none; }
+  main { display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; height: 100%; padding: 16px; box-sizing: border-box; }
+  .cam { position: relative; background: #000; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .cam img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .cam .tag { position: absolute; left: 12px; top: 10px; color: var(--dim); font-size: 15px; }
+  aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px;
+          display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 18px; }
+  .stat b { color: var(--dim); font-weight: 500; }
+  .stat span { text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ok { color: var(--green); } .warn { color: var(--amber); } .bad { color: var(--red); }
+  button { font: inherit; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+           padding: 0; cursor: pointer; }
+  button:active { transform: scale(0.98); filter: brightness(1.3); }
+  .stop { background: var(--red); color: #fff; border: none; font-size: 34px; font-weight: 700; letter-spacing: 0.1em; flex: 1.3; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; }
+  .row button { font-size: 22px; color: var(--amber); }
+  .back { flex: 0 0 52px; color: var(--dim); font-size: 18px; }
+  /* same spot and look as the face's ROBOT button, lit: tap = back to Buddy (toggle) */
+  #robot { position: fixed; top: 18px; left: 18px; padding: 10px 16px; font: 600 16px/1 ui-monospace, "Share Tech Mono", monospace;
+           color: #050506; background: var(--amber); border: 1px solid var(--amber); border-radius: 10px; z-index: 2; }
+  #msg { min-height: 1.3em; color: var(--amber); font-size: 16px; text-align: center; }
+</style></head>
+<body>
+<button id="robot" title="Back to Buddy">ROBOT</button>
+<main>
+  <div class="cam"><img id="cam" alt="robot camera"><div class="tag">robot camera</div></div>
+  <aside>
+    <div class="stat">
+      <b>battery</b><span id="bat">…</span>
+      <b>charger</b><span id="plug">…</span>
+      <b>mind</b><span id="mind">…</span>
+      <b>wheels</b><span id="wheels">…</span>
+      <b>task</b><span id="task">…</span>
+    </div>
+    <button class="stop" data-act="stop">STOP</button>
+    <div class="row"><button data-act="come">Come here</button><button data-act="home">Go home</button></div>
+    <div class="row"><button data-act="look">Look around</button><button class="back" id="back">Back to Buddy</button></div>
+    <div id="msg"></div>
+  </aside>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  const cam = $('cam');
+  // camera: live MJPEG stream at the camera's rate (~14 fps); if it drops, stills every 0.3 s until it reconnects
+  let stills = false;
+  const nextFrame = () => { cam.src = '/robot/frame.jpg?t=' + Date.now(); };
+  const live = () => { stills = false; cam.src = '/robot/stream.mjpg?t=' + Date.now(); };
+  cam.onload = () => { if (stills) setTimeout(nextFrame, 300); };
+  cam.onerror = () => { if (!stills) { stills = true; setTimeout(nextFrame, 500); setTimeout(live, 10000); }
+                        else setTimeout(nextFrame, 2000); };
+  live();
+  const set = (id, text, cls) => { const e = $(id); e.textContent = text; e.className = cls || ''; };
+  async function status() {
+    try {
+      const s = await (await fetch('/robot/status')).json();
+      const v = s.battery_v;
+      set('bat', v ? v.toFixed(2) + ' V' : '—', !v ? '' : v < 10.3 ? 'bad' : v < 10.9 ? 'warn' : 'ok');
+      set('plug', s.plugged === true ? 'on charger' : s.plugged === false ? 'unplugged' : 'unknown', s.plugged ? 'warn' : '');
+      set('mind', (s.mind || '—') + (s.mind_why ? ' · ' + s.mind_why : ''));
+      set('wheels', s.estop ? 'E-STOP ' + s.estop : s.wheels ? 'enabled' : 'off', s.estop ? 'bad' : s.wheels ? 'warn' : 'ok');
+      const l = s.last || {};
+      set('task', s.task ? 'running' : l.ev ? (l.ev + (l.result ? ' ' + l.result : '') + (l.reason ? ' · ' + l.reason : '')) : '—', s.task ? 'warn' : '');
+    } catch (e) { set('mind', 'robot not reachable', 'bad'); }
+  }
+  status(); setInterval(status, 1500);
+  document.querySelectorAll('button[data-act]').forEach(b => b.onclick = async () => {
+    $('msg').textContent = b.textContent + '…';
+    try {
+      const r = await (await fetch('/robot/do', { method: 'POST', body: b.dataset.act })).json();
+      $('msg').textContent = r.msg || (r.started === false ? 'not started: ' + (r.error || '') : r.ok === false ? 'failed' : b.textContent + ' sent');
+    } catch (e) { $('msg').textContent = 'robot not reachable'; }
+    status();
+  });
+  $('back').onclick = $('robot').onclick = () => { location.href = '/face'; };
+</script>
+</body></html>

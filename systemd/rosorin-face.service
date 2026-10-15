@@ -1,0 +1,20 @@
+[Unit]
+Description=Buddy's face on the robot's touchscreen, drawn into the framebuffer (robot_face/face_fb.py; no X, no browser)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=burgerbarn
+Group=video
+SupplementaryGroups=input
+Environment=BUDDY_FACE_EVENTS=http://192.168.1.111:8290/events
+# the kernel console shares the framebuffer: park it on an empty terminal and keep its messages off the screen
+ExecStartPre=+/bin/chvt 7
+ExecStartPre=+/usr/bin/dmesg -n 1
+ExecStartPre=+/bin/sh -c 'echo 0 > /sys/class/graphics/fbcon/cursor_blink; TERM=linux setterm --cursor off > /dev/tty7'
+ExecStart=/usr/bin/python3 /home/burgerbarn/face/face_fb.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

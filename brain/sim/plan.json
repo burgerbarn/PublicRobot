@@ -1,0 +1,216 @@
+{
+  "_doc": "Hand decisions for blocks whose text gives the runner no machine-readable signal. Keys: section (substring of 'H2 / H3'), first_line (prefix), contains (substring of the block), host; action: RUN, LISTING, PATH, HW, DESTRUCTIVE, OTHERHOST (bash) or SNIPPET/CREATE/APPEND/OVERWRITE with path (files). Every entry says why. only/unless: \"fake-systemd\" = the entry applies only with / only without run_chapter.py --fake-systemd.",
+  "ch10": [
+    {
+      "section": "If the finished software already runs on the robot",
+      "host": "robot",
+      "only": "fake-systemd",
+      "action": "PATH",
+      "reason": "the guide says: on a fresh build there is no rosorin-base service yet, skip this part"
+    },
+    {
+      "section": "Put the robot back",
+      "host": "robot",
+      "only": "fake-systemd",
+      "action": "PATH",
+      "reason": "the guide says: on a fresh build there is nothing to restore"
+    }
+  ],
+  "ch15": [
+    {
+      "first_line": "ssh bigbuddy 'cd ~/rosorin-vendor",
+      "action": "RUN",
+      "reason": "the bigbuddy path of the chapter (the factory partition is gone); bigbuddy is emulated by a read-only mount of its ~/rosorin-vendor"
+    },
+    {
+      "section": "Install the driver: install_aurora930.sh",
+      "action": "PATH",
+      "reason": "factory-partition path; the guide says the bigbuddy path already covers the install script"
+    },
+    {
+      "section": "Remove the GitLab token",
+      "action": "PATH",
+      "reason": "the guide says the bigbuddy path already covers the token section (the remote was removed there)"
+    }
+  ],
+  "ch17": [
+    {
+      "first_line": "dpkg -l ros-humble-slam-toolbox",
+      "action": "RUN",
+      "reason": "package check + apt install (offline, preinstalled); its last line counts held nvidia-l4t packages, 0 in the container"
+    },
+    {
+      "section": "Remapping the room with the robot itself",
+      "action": "LISTING",
+      "reason": "excerpts of scripts/explore_run.sh, shown for reading"
+    },
+    {
+      "first_line": "import numpy as np",
+      "contains": "NAME = 'room_20260928'",
+      "host": "mac",
+      "action": "CREATE",
+      "path": "~/rosorin-maps/mask.py",
+      "reason": "the text after the block says: Save it as `~/rosorin-maps/mask.py` (run by the verify step on the repo's map)"
+    }
+  ],
+  "ch18": [
+    {
+      "first_line": "sudo bash ~/setup/install_isaac_ros.sh",
+      "action": "HW",
+      "reason": "Isaac ROS / CUDA / cuVSLAM aarch64 wheel: Jetson + GPU only"
+    },
+    {
+      "first_line": "set -e",
+      "contains": "WANT=1.1.20",
+      "action": "LISTING",
+      "reason": "excerpt of scripts/install_nav2_behaviors_fix.sh, shown for reading"
+    },
+    {
+      "first_line": "SRC=$HOME/ros2_ws/src/nav2_behaviors",
+      "action": "LISTING",
+      "reason": "excerpt of scripts/install_nav2_behaviors_fix.sh, shown for reading"
+    },
+    {
+      "first_line": "source /opt/ros/humble/setup.bash",
+      "contains": "--packages-select nav2_behaviors",
+      "action": "LISTING",
+      "reason": "excerpt of scripts/install_nav2_behaviors_fix.sh, shown for reading"
+    },
+    {
+      "first_line": "sudo systemctl stop rosorin-nav",
+      "contains": "nav2_bringup_check.sh",
+      "action": "RUN",
+      "reason": "isolated-domain Nav2 bring-up check runs without hardware; its first line (systemctl) fails in the container, which has no systemd"
+    }
+  ],
+  "ch20": [
+    {
+      "section": "Step 4: the Python environment",
+      "action": "HW",
+      "reason": "vision venv with torch from the Jetson AI Lab index (arm64 CUDA)"
+    },
+    {
+      "section": "Step 5: PyTorch for the Jetson",
+      "action": "HW",
+      "reason": "Jetson CUDA torch (arm64 + GPU)"
+    },
+    {
+      "section": "Step 6: torch2trt and NanoOWL",
+      "action": "HW",
+      "reason": "needs the Jetson CUDA venv and TensorRT"
+    },
+    {
+      "section": "Step 7: build the two engines",
+      "action": "HW",
+      "reason": "TensorRT engines on the Jetson GPU"
+    },
+    {
+      "section": "Step 8: the Hugging Face cache",
+      "action": "HW",
+      "reason": "cache filled by the engine builds (Jetson)"
+    },
+    {
+      "section": "Step 9: facenet-pytorch",
+      "action": "HW",
+      "reason": "needs the Jetson CUDA venv"
+    },
+    {
+      "section": "Your first detection",
+      "host": "robot",
+      "action": "HW",
+      "reason": "needs the camera, the vision venv and the GPU engines"
+    },
+    {
+      "section": "Your first detection",
+      "host": "mac",
+      "action": "HW",
+      "reason": "copies a detection picture made on the robot's GPU"
+    },
+    {
+      "section": "Measured speeds",
+      "action": "HW",
+      "reason": "camera + GPU engines"
+    }
+  ],
+  "ch21": [
+    {
+      "first_line": "source /opt/ros/humble/setup.bash; source ~/ros2_ws/install/setup.bash",
+      "contains": "mind.py",
+      "action": "HW",
+      "reason": "the mind needs the camera, the driver and the vision venv (Jetson CUDA)"
+    },
+    {
+      "first_line": "cd ~/vision && venv/bin/python reappear.py",
+      "action": "HW",
+      "reason": "needs the vision venv (Jetson CUDA torch, chapter 20) and the mind's event logs"
+    },
+    {
+      "first_line": "f=~/vision/think/",
+      "action": "HW",
+      "reason": "reads thoughts a running mind wrote"
+    }
+  ],
+  "ch22": [
+    {
+      "first_line": "api)",
+      "action": "LISTING",
+      "reason": "excerpt of scripts/ops/deploy.sh, shown for reading"
+    },
+    {
+      "first_line": "grep '\"heard\"'",
+      "action": "HW",
+      "reason": "reads the running mind's event log after a request from bigbuddy"
+    }
+  ],
+  "ch23": [
+    {
+      "first_line": "sudo bash ~/setup/install_selfcare.sh",
+      "unless": "fake-systemd",
+      "action": "HW",
+      "reason": "installs and starts systemd timer units (no systemd in the container)"
+    },
+    {
+      "first_line": "cd ~/selfcare",
+      "contains": "voice_test",
+      "action": "OTHERHOST",
+      "reason": "needs Buddy running on bigbuddy (chapter 26)"
+    },
+    {
+      "first_line": "source /opt/ros/humble/setup.bash; cd ~/selfcare && SELFCARE_DRY=1",
+      "action": "OTHERHOST",
+      "reason": "needs the brain on bigbuddy (chapter 25)"
+    }
+  ],
+  "ch24": [
+    {
+      "first_line": "finish() {",
+      "action": "LISTING",
+      "reason": "excerpt of scripts/explore_run.sh, shown for reading"
+    },
+    {
+      "first_line": "# camera straight ahead while navigating",
+      "action": "LISTING",
+      "reason": "excerpt of scripts/explore_run.sh, shown for reading"
+    },
+    {
+      "first_line": "# record the run",
+      "action": "LISTING",
+      "reason": "excerpt of scripts/explore_run.sh, shown for reading"
+    },
+    {
+      "first_line": "# keep the new map only",
+      "action": "LISTING",
+      "reason": "excerpt of scripts/explore_run.sh, shown for reading"
+    },
+    {
+      "first_line": "grep -h \"body_skill\"",
+      "action": "HW",
+      "reason": "reads the running mind's event log"
+    },
+    {
+      "first_line": "L=$(ls -td ~/explore/*/",
+      "action": "HW",
+      "reason": "reads the log of a floor run"
+    }
+  ]
+}

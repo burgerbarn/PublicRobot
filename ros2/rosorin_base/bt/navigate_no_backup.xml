@@ -1,0 +1,36 @@
+<!--
+  nav2_bt_navigator 1.1.20 navigate_to_pose_w_replanning_and_recovery.xml with the BackUp and Spin recoveries
+  removed (rosorin) = NVIDIA's Nova Carter tree: clear the costmaps, wait, try again.
+  BackUp: LiDAR is blind over the rear ~65 deg (138..180..155 deg), reversing is unsafe (screen door, 2026-10-02).
+  Spin (removed 2026-10-02): Nav2 1.1.20 publishes its first command without any collision check and then looks
+  ahead only as far as it has already turned; measured on the robot's build with a post 3 cm from the nose: 1.0 rad/s
+  for the whole run (scripts/tests/nav2_isolated_checks.sh spin; docs/research/nav2_reference.md section 20).
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Wait wait_duration="5"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

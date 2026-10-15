@@ -1,0 +1,13 @@
+[Unit]
+Description=Buddy's face on the Den TV once the desktop session is up (media_screen.show_face; no-op if running)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/voice
+ExecStartPre=/bin/sleep 5
+ExecStart=%h/voice/venv/bin/python -c "import media_screen as ms; ms.show_face()"
+
+[Install]
+WantedBy=graphical-session.target

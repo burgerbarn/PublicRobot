@@ -1,0 +1,16 @@
+# explore_lite (m-explore-ros2, BSD): frontier exploration on the Nav2 global costmap (slam map + LiDAR + nvblox).
+# Stock parameters except the costmap topics and the frontier size (one room).
+/**:
+  ros__parameters:
+    robot_base_frame: base_link
+    return_to_init: true          # no frontier left -> back to where it started
+    costmap_topic: /global_costmap/costmap
+    costmap_updates_topic: /global_costmap/costmap_updates
+    visualize: false
+    planner_frequency: 0.15
+    progress_timeout: 30.0
+    potential_scale: 3.0
+    orientation_scale: 0.0
+    gain_scale: 1.0
+    transform_tolerance: 0.3
+    min_frontier_size: 0.5

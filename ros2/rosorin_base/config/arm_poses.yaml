@@ -1,0 +1,11 @@
+# Named arm poses (servo pulses). Owner-taught poses are read back from the servos, not computed.
+# Model: model/arm_model.py (known false positive: any joint-5 roll flags link5 vs camera mount).
+default:        {1: 500, 2: 860, 3: 45, 4: 178, 5: 500, 10: 499}   # S-coil rest (arm_rest_*)
+drive:          {1: 500, 2: 793, 3: 51, 4: 160, 5: 499, 10: 499}   # camera -29 deg, floor 0.32-4.2 m ahead
+look_down_a:    {2: 200, 3: 220, 4: 331}                           # camera 0.23 m ahead, 0.11 m up, -89 deg (tested live)
+look_down_b:    {2: 170, 3: 470, 4: 231}                           # camera 0.28 m ahead, 0.20 m up, -61 deg (tested live)
+# owner-taught with the gamepad, 2026-09-29. Model: camera 0.21 m ahead, 0.14 m up, -70 deg; gripper lowest ~0.115 m.
+# Shoulder (2) at 47 C while holding here: don't hold long.
+# Return verified 2026-09-29: auto-tuck went toes -> default (+claw closed, 10.1 s) -> tuck (1.6 s), tucked=true,
+# owner watched: clears the servo safely. No taught path needed.
+touch_your_toes: {1: 484, 2: 254, 3: 255, 4: 157, 5: 496, 10: 504}

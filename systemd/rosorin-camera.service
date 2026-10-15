@@ -1,0 +1,17 @@
+[Unit]
+Description=ROSOrin depth camera (Deptrum Aurora 930 vendor driver, owner-approved exception; /aurora/*)
+After=network-online.target rosorin-base.service
+Wants=network-online.target
+
+[Service]
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && source /home/burgerbarn/vendor_ws/install/setup.bash && exec ros2 launch deptrum-ros-driver-aurora930 aurora930_launch.py'
+KillSignal=SIGINT
+KillMode=mixed
+TimeoutStopSec=10
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

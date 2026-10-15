@@ -1,0 +1,19 @@
+[Unit]
+Description=ROSOrin base (board driver with gated motion, LiDAR, static TF)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ext_ws/install/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && exec ros2 launch rosorin_base base.launch.py'
+KillSignal=SIGINT
+KillMode=mixed
+TimeoutStopSec=10
+# stop frame after ANY stop/crash of the unit (board has no watchdog)
+ExecStopPost=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ext_ws/install/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && exec /home/burgerbarn/ros2_ws/install/rosorin_base/lib/rosorin_base/stop_motors'
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

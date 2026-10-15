@@ -1,0 +1,7 @@
+#!/bin/bash
+# lightbot-sim: the container has no network. `apt-get update` is skipped (package lists come from the image build);
+# everything else goes to the real apt-get (installing a package that is not in the image fails: download impossible).
+for a in "$@"; do
+  if [ "$a" = update ]; then echo "[sim] apt-get update skipped: no network in the test robot (lists from the image build)"; exit 0; fi
+done
+exec /usr/bin/apt-get "$@"

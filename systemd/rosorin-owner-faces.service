@@ -1,0 +1,8 @@
+[Unit]
+Description=ROSOrin self-training: learn the owner's face from the robot mind's frames (vision/owner_faces.py)
+
+[Service]
+Type=oneshot
+User=burgerbarn
+Nice=10
+ExecStart=/bin/bash -c 'source /home/burgerbarn/vision/venv/bin/activate && cd /home/burgerbarn/vision && python owner_faces.py'

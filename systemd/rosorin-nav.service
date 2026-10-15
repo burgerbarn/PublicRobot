@@ -1,0 +1,23 @@
+[Unit]
+Description=ROSOrin navigation, always on: kept room map + AMCL + Nav2 + nvblox, kept usable by rosorin_base/nav_supervisor (skills are clients: nav_wait, then goals)
+After=rosorin-base.service rosorin-camera.service rosorin-vslam.service
+Requires=rosorin-base.service
+# restarts are the supervisor's last resort (three failed heals); never give up
+StartLimitIntervalSec=0
+
+[Service]
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+# leftovers of an earlier navigation (2026-09-28: launch SIGINT left nav2 nodes running) would answer for this one
+ExecStartPre=/bin/bash /home/burgerbarn/setup/nav_stop.sh
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && exec ros2 launch rosorin_base nav.launch.py'
+ExecStopPost=/bin/bash /home/burgerbarn/setup/nav_stop.sh
+KillSignal=SIGINT
+TimeoutStopSec=30
+Restart=always
+# 20 s: a stack started within seconds of the old one being killed fails to come up (reproduced 2026-10-05,
+# docs/research/always_on_navigation_reference.md section 6)
+RestartSec=20
+
+[Install]
+WantedBy=multi-user.target

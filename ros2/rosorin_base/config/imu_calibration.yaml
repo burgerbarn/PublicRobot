@@ -1,0 +1,7 @@
+# Accelerometer calibration for THIS robot's board IMU (2026-09-27): 6-orientation static poses,
+# per-axis ellipsoid least-squares fit. corrected_g = scale * (raw_g - offset).
+# Residual |a| error over 8 poses: max 0.0004 g (raw: 0.073 g). See docs/hardware.md.
+rosorin_board_driver:
+  ros__parameters:
+    accel_offset_g: [0.0460, -0.0635, -0.0501]
+    accel_scale: [1.0058, 0.9964, 1.0076]

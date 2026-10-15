@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep the XPS from idle-sleeping while it serves the lightBot coder model (only idle; lid close and manual sleep are not blocked)
+After=lightbot-coder.service
+BindsTo=lightbot-coder.service
+
+[Service]
+ExecStart=/usr/bin/systemd-inhibit --what=idle --who=lightbot-coder --why="serving the lightBot coder model to bigbuddy" --mode=block sleep infinity
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=lightbot-coder.service

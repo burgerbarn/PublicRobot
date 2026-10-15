@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSOrin explores its room by itself (Nav2 + AMCL, static map; one run per start) - behavior/room_explorer.py
+After=rosorin-base.service
+Requires=rosorin-base.service
+
+[Service]
+Type=simple
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash /home/burgerbarn/setup/explore_run.sh
+ExecStopPost=/bin/bash -c 'source /opt/ros/humble/setup.bash && timeout 10 ros2 service call /rosorin_board_driver/enable std_srvs/srv/SetBool "{data: false}"'
+KillSignal=SIGINT
+TimeoutStopSec=30
+Restart=no
+# not enabled at boot: the robot cannot tell plugged-in/on-stand from on-the-floor (docs/hardware.md); owner starts a run

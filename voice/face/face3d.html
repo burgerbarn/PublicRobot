@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Buddy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Buddy's face on a 3D head: the 2D face (face.js, unchanged look: eyes, spectrum mouth, expressions) is drawn every
+     frame into a texture wrapped on the front of a black cylinder (three.js r160, vendored). The head turns/tilts with
+     his gaze and state; captions stay flat on screen. /face (2D) stays the fallback. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #050506; overflow: hidden; }
+  /* touchscreen: the page handles every touch itself (Chromium otherwise takes horizontal swipes for scrolling /
+     back-forward navigation and cancels them - swipes never arrived, 2026-10-01) */
+  html, body, canvas { touch-action: none; overscroll-behavior: none; }
+  canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; }
+  #cap { pointer-events: none; }
+  /* ?quarter=1: a quarter-screen widget in the bottom-right corner (owner 2026-09-30) */
+  html.quarter canvas { inset: auto 0 0 auto; width: 50vw; height: 50vh; }
+  html.cursor-idle, html.cursor-idle * { cursor: none !important; }
+  #desk { position: fixed; top: 76px; right: 24px; padding: 12px 22px; font: 600 18px/1 ui-monospace, "Share Tech Mono", monospace;
+          color: #ffb020; background: rgba(20, 20, 24, 0.85); border: 1px solid rgba(255, 176, 32, 0.5); border-radius: 10px;
+          cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 2; }
+  #desk:hover { background: rgba(255, 176, 32, 0.18); }
+  html.ui-on #desk, html.ui-on #size { opacity: 1; pointer-events: auto; }
+  #size { position: fixed; top: 76px; right: 190px; padding: 12px 22px; font: 600 18px/1 ui-monospace, "Share Tech Mono", monospace;
+          color: #ffb020; background: rgba(20, 20, 24, 0.85); border: 1px solid rgba(255, 176, 32, 0.5); border-radius: 10px;
+          cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 2; }
+  #size:hover { background: rgba(255, 176, 32, 0.18); }
+  /* touchscreen (owner 2026-10-01): robot panel button (always faintly visible) + gesture confirmation */
+  #robot { position: fixed; top: 18px; left: 18px; padding: 10px 16px; font: 600 16px/1 ui-monospace, "Share Tech Mono", monospace;
+           color: #ffb020; background: rgba(20, 20, 24, 0.6); border: 1px solid rgba(255, 176, 32, 0.35); border-radius: 10px;
+           opacity: 0.45; z-index: 2; }
+  #shuffle { position: fixed; top: 18px; right: 18px; padding: 10px 16px; font: 600 16px/1 ui-monospace, "Share Tech Mono", monospace;
+             color: #ffb020; background: rgba(20, 20, 24, 0.6); border: 1px solid rgba(255, 176, 32, 0.35);
+             border-radius: 10px; opacity: 0.45; z-index: 2; }
+  #playstop { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); padding: 10px 22px;
+              font: 600 16px/1 ui-monospace, "Share Tech Mono", monospace; color: #ffb020; background: rgba(20, 20, 24, 0.6);
+              border: 1px solid rgba(255, 176, 32, 0.35); border-radius: 10px; opacity: 0.45; z-index: 2; min-width: 96px; }
+  #toast { position: fixed; left: 50%; top: 76px; transform: translateX(-50%); padding: 10px 18px; border-radius: 10px;
+           font: 600 20px/1.2 ui-monospace, "Share Tech Mono", monospace; color: #f4f4f0; background: rgba(20, 20, 24, 0.8);
+           opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 3; }
+</style></head>
+<body>
+<canvas id="gl"></canvas><canvas id="cap"></canvas>
+<button id="size" title="Shrink Buddy to a 25 % window (drag/resize it with Alt+drag) or back to full screen">⤡ Widget</button>
+<button id="robot" title="Robot panel">ROBOT</button>
+<button id="shuffle" title="Shuffle the whole library">SHUFFLE</button>
+<button id="playstop" title="Play / stop music">PLAY</button>
+<div id="toast"></div>
+<button id="desk" title="Minimize Buddy and show the desktop (Meta+Shift+B brings him back)">Desktop ⤓</button>
+<script src="/face.js"></script>
+<script type="module">
+  import * as THREE from '/vendor/three.module.js';
+  const q = new URLSearchParams(location.search);
+  const quarter = q.get('quarter') === '1';
+  if (quarter) document.documentElement.classList.add('quarter');
+  const boredAfter = +(q.get('bored') || 300), expr = q.get('expr') || undefined;
+  const model = BuddyFace.connect('/events');
+
+  // the face texture: face.js draws into it exactly as on the flat screen (no scanlines, no caption)
+  const TW = 1024, TH = 512, texCanvas = document.createElement('canvas');   // 2048x1024 ran at 3.3 fps on the 4K TV
+  texCanvas.width = TW; texCanvas.height = TH;
+  const tctx = texCanvas.getContext('2d');
+  const faceTex = new THREE.CanvasTexture(texCanvas);
+  faceTex.colorSpace = THREE.SRGBColorSpace; faceTex.anisotropy = 8;
+
+  const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true });
+  renderer.setPixelRatio(1);                           // 1080p render: glow on black, 4K costs 4x for nothing visible
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x050506);
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);   // moderate lens: the 3D reads without exaggeration
+
+  // head = black cylinder; the face sits on its front ARC (black in the texture adds nothing: additive blend)
+  const R = 1.1, HGT = 1.62, ARC = Math.PI * 0.9;     // arc length R*ARC ~ 3.1 : height ~1.5 = the texture's 2:1
+  const head = new THREE.Group(); scene.add(head);
+  // owner 2026-09-30: cylinder body invisible - only the curved face shows (?body=1 brings the black head back)
+  const showBody = q.get('body') === '1';
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, HGT, 128, 1, false),
+    new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.38, metalness: 0.55 }));
+  body.visible = showBody; head.add(body);
+  head.add(new THREE.Mesh(new THREE.CylinderGeometry(R * 1.003, R * 1.003, HGT * 0.94, 128, 1, true, -ARC / 2, ARC),
+    new THREE.MeshBasicMaterial({ map: faceTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
+  // a thin bright rim on the top and bottom edges so the shape reads against the dark room
+  for (const y of [HGT / 2, -HGT / 2]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.012, 8, 128),
+      new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.3, metalness: 0.8 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = y; ring.visible = showBody; head.add(ring);
+  }
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+  const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(-3, 4, 5); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x6fa8ff, 1.8); rim.position.set(3, 1, -4); scene.add(rim);
+  const glow = new THREE.PointLight(0xffb020, 2.5, 6); glow.position.set(0, 0, 2.2); scene.add(glow);   // face glow on the body
+
+  const capCanvas = document.getElementById('cap'), cctx = capCanvas.getContext('2d');
+  let yaw = 0, pitch = 0;
+  // 30 fps cap (2026-10-01): uncapped (~127 fps) GPU load made the touchscreen glitch; the face looks the same at 30
+  const FPS = +(q.get('fps') || 30); let lastDraw = -1e9;
+  function frame(ts) {
+    if (ts - lastDraw < 1000 / FPS - 1) { requestAnimationFrame(frame); return; }
+    lastDraw = ts;
+    const t = ts / 1000, dpr = window.devicePixelRatio || 1, w = quarter ? innerWidth / 2 : innerWidth, h = quarter ? innerHeight / 2 : innerHeight;
+    // 1. the face as a texture (this also advances the face model: gaze, zoom, expressions, bands)
+    BuddyFace.draw(tctx, TW, TH, model, t, { boredAfter, expr, noScan: true, noCaption: true, blackBg: true });
+    faceTex.needsUpdate = true;
+    // 2. the head follows the eyes (eyes lead, head lags), plus state
+    const g = model.gaze || [0, 0], bk = model.boredK || 0;
+    const bass = model.music ? ((model.bands[0] || 0) + (model.bands[1] || 0) + (model.bands[2] || 0)) / 3 : 0;
+    const tYaw = g[0] * 0.75 + (model.state === 'idle' && !model.music ? 0.11 * Math.sin(t * 0.23) : 0);   // up to ~30 deg (owner: 45 too much)
+    const tPitch = g[1] * 0.45 + bk * 0.25 + (model.state === 'listening' ? -0.05 : 0) + (model.state === 'idle' ? 0.04 * Math.sin(t * 0.17) : 0);   // + = looks down, up to ~15 deg
+    const hk = 1 - Math.pow(1 - 0.04, Math.min(0.1, t - (window._ht ?? t)) * 60); window._ht = t;   // same speed at any fps
+    yaw += (tYaw - yaw) * hk; pitch += (tPitch - pitch) * hk;
+    head.rotation.set(pitch, yaw, 0.03 * Math.sin(t * 0.4) * (1 - bk));
+    head.position.y = bass * 0.06 - bk * 0.05;
+    // 3. camera distance = the face's zoom (leans in when listening, drifts while idle)
+    if (renderer.domElement.width !== Math.floor(w * renderer.getPixelRatio())) { renderer.setSize(w, h, false); }
+    camera.aspect = w / h; camera.position.set(0, 0.05, 4.2 / (model.zoom || 1)); camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    const col = model.music && model.state === 'idle' ? new THREE.Color(`hsl(${Math.round((t * 40) % 360)}, 100%, 60%)`) : null;
+    glow.color.set(col || { idle: 0xffb020, listening: 0x46ff8a, thinking: 0x33d6ff, working: 0xb388ff, speaking: 0xfff0d0 }[model.state] || 0xffb020);
+    renderer.render(scene, camera);
+    // 4. captions flat on screen, full width, as on the 2D face
+    if (capCanvas.width !== w * dpr || capCanvas.height !== h * dpr) { capCanvas.width = w * dpr; capCanvas.height = h * dpr; }
+    cctx.setTransform(dpr, 0, 0, dpr, 0, 0); cctx.clearRect(0, 0, w, h);
+    BuddyFace.drawCaption(cctx, w, h, model, t);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // pointer hides after 3 s idle; the Desktop button shows only after real mouse movement (as on /face)
+  (() => { let tm; const root = document.documentElement;
+    const wake = e => { root.classList.remove('cursor-idle'); if (e) root.classList.add('ui-on'); clearTimeout(tm);
+      tm = setTimeout(() => root.classList.add('cursor-idle') || root.classList.remove('ui-on'), 3000); };
+    ['mousemove', 'mousedown', 'keydown'].forEach(e => addEventListener(e, wake, { passive: true })); wake(); })();
+  // Widget/Full: a 25 % window bottom-right (kept above) <-> full screen; the label follows the window's real size
+  const sizeBtn = document.getElementById('size');
+  const small = () => innerWidth < screen.width * 0.75;
+  const label = () => { sizeBtn.textContent = small() ? '⤢ Full' : '⤡ Widget'; };
+  addEventListener('resize', label); label();
+  sizeBtn.onclick = () => fetch('/mode', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: small() ? 'full' : 'widget' }).catch(() => {});
+  // touchscreen (owner 2026-10-01): tap = listen (like "yo buddy"); swipe left/right = next/previous track;
+  // swipe up/down = music volume; long-press = pause/resume; double-tap = play this song's album. Buttons excluded.
+  const toastEl = document.getElementById('toast'); let toastT;
+  const toast = msg => { toastEl.textContent = msg; toastEl.style.opacity = 1; clearTimeout(toastT);
+                         toastT = setTimeout(() => toastEl.style.opacity = 0, 1600); };
+  const gesture = (act, label) => { toast(label);
+    fetch('/music', { method: 'POST', body: act }).then(r => r.json()).then(j => j.msg && toast(j.msg)).catch(() => {}); };
+  let g = null, lastTap = 0, pendingListen = null;
+  // phantom touches (2026-10-02: taps nobody made, panel stylus device): only a real finger or the mouse counts
+  const real = e => (e.pointerType === 'touch' || e.pointerType === 'mouse') && e.isPrimary;
+  addEventListener('pointerdown', e => {
+    if (e.target.closest('button') || !real(e)) return;
+    g = { x: e.clientX, y: e.clientY, t: performance.now(), type: e.pointerType, done: false };
+    g.lp = setTimeout(() => { if (g && !g.done) { g.done = true; gesture('toggle', '⏯'); } }, 650);
+  });
+  addEventListener('pointermove', e => {
+    if (g && Math.hypot(e.clientX - g.x, e.clientY - g.y) > 30) clearTimeout(g.lp);
+  });
+  addEventListener('pointercancel', e => { if (g) { clearTimeout(g.lp); g = null; } });
+  addEventListener('pointerup', e => {
+    if (!g) return; clearTimeout(g.lp);
+    const dx = e.clientX - g.x, dy = e.clientY - g.y, was = g; g = null;
+    if (was.done) return;
+    const far = 80;
+    if (Math.abs(dx) > far && Math.abs(dx) > Math.abs(dy)) return gesture(dx < 0 ? 'next' : 'previous', dx < 0 ? '⏭ next' : '⏮ previous');
+    if (Math.abs(dy) > far) return gesture(dy < 0 ? 'vol_up' : 'vol_down', dy < 0 ? '🔊 louder' : '🔉 quieter');
+    const now = performance.now(), dur = now - was.t, dist = Math.hypot(dx, dy);
+    const info = `${was.type} ${Math.round(dur)}ms ${Math.round(dist)}px`;
+    if (dur < 50 || dur > 500 || dist > 20) {                  // not a clean tap: ignore (logged for diagnosis)
+      fetch('/listen', { method: 'POST', body: 'ignored ' + info }).catch(() => {}); return;
+    }
+    if (now - lastTap < 350) { clearTimeout(pendingListen); lastTap = 0; return gesture('album', '💿 this album'); }
+    lastTap = now;
+    pendingListen = setTimeout(() => fetch('/listen', { method: 'POST', body: 'tap ' + info }).catch(() => {}), 350);
+  });
+  document.getElementById('robot').onclick = () => { location.href = '/robot'; };
+  document.getElementById('shuffle').onclick = () => gesture('shuffle', '🔀 shuffle');
+  // PLAY / STOP: label follows the face's music state (SSE); stop when playing, else shuffle everything
+  const ps = document.getElementById('playstop');
+  setInterval(() => { ps.textContent = model.music ? '■ STOP' : '▶ PLAY'; }, 500);
+  ps.onclick = () => gesture('playstop', model.music ? '■ stop' : '▶ play');
+  document.getElementById('desk').onclick = () =>
+    fetch('/mode', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'desktop' }).catch(() => {});
+</script></body></html>

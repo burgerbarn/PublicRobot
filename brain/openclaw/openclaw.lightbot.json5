@@ -1,0 +1,36 @@
+// The lightBot part of ~/.openclaw/openclaw.json on the Mac (guide chapter 35). Merge these keys into the existing
+// file (or set them with `openclaw config set`); OpenClaw reloads the file when it changes.
+// Keys and values from the OpenClaw 2026.10.3 docs (brain/openclaw/README.md lists the doc lines).
+{
+  models: {
+    // only the providers below: no built-in hosted catalog, so no hosted model can be picked or fallen back to
+    mode: "replace",
+    providers: {
+      // the XPS's gpt-oss-20b (llama-server --jinja, chapter 34) through an SSH tunnel on the Mac: 127.0.0.1:8082
+      xps: {
+        baseUrl: "http://127.0.0.1:8082/v1",
+        apiKey: "local",
+        api: "openai-completions",
+        timeoutSeconds: 300,
+        models: [{ id: "gpt-oss-20b", name: "gpt-oss-20b on the XPS", reasoning: true, input: ["text"],
+                   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 16384, maxTokens: 4096 }],
+      },
+      // bigbuddy's LM Studio on the LAN (chapter 25: it listens on 0.0.0.0:1234)
+      lmstudio: {
+        baseUrl: "http://192.168.1.111:1234/v1",
+        apiKey: "lmstudio",
+        api: "openai-completions",
+        models: [{ id: "openai/gpt-oss-20b" }],
+      },
+    },
+  },
+  agents: {
+    defaults: {
+      model: { primary: "xps/gpt-oss-20b", fallbacks: ["lmstudio/openai/gpt-oss-20b"] },
+    },
+  },
+  // the lightbot skill straight from the repo clone (no copy to keep in sync)
+  skills: { load: { extraDirs: ["~/CCode/rosorin-pro/brain/openclaw/skills"] } },
+  // exec: allowlisted commands run, every other command asks the owner (allowlist = lightbot_robot.py only)
+  tools: { exec: { mode: "ask" } },
+}

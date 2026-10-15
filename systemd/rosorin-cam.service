@@ -1,0 +1,12 @@
+[Unit]
+Description=ROSOrin external camera: latest frame to /dev/shm/cam_latest.jpg (2 fps)
+After=multi-user.target
+
+[Service]
+User=burgerbarn
+ExecStart=/usr/bin/ffmpeg -hide_banner -loglevel error -f v4l2 -input_format mjpeg -video_size 1280x720 -i /dev/v4l/by-id/usb-046d_0821_BC58E8E0-video-index0 -vf fps=2 -q:v 4 -update 1 -y /dev/shm/cam_latest.jpg
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

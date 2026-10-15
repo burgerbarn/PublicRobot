@@ -1,0 +1,34 @@
+# Simulated rebuild, GPU sidecar for chapters 20-24 (guide/sim/GPU_SIDECAR.md 1.1): the robot's vision Python stack
+# on bigbuddy's RTX 5070 Ti. SUBSTITUTE VERSIONS: Blackwell (sm_120) needs CUDA >= 12.8, TensorRT >= 10.8 and cu128
+# torch; the robot runs CUDA 12.6, TensorRT 10.3, torch 2.8.0 jp6/cu126. A pass here proves code, commands and
+# recipe, not the robot's binaries.
+FROM ros:humble-ros-base-jammy
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y wget git iproute2 python3-venv python3-pip python3-opencv python3-numpy \
+      python3-pil python3-matplotlib python3-yaml python3-requests python3-scipy python3-tqdm \
+      ros-humble-control-msgs ros-humble-tf2-ros ros-humble-std-srvs ros-humble-cv-bridge \
+ && wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
+ && dpkg -i cuda-keyring_1.1-1_all.deb && rm cuda-keyring_1.1-1_all.deb && apt-get update
+# x86 analogue of scripts/install_vision.sh line 11 (12-6 -> 12-8, TensorRT 10.3 -> 10.8; cuDNN from torch's wheels)
+ARG T=10.8.0.43-1+cuda12.8
+RUN apt-get install -y cuda-libraries-12-8 cuda-cudart-dev-12-8 cuda-cupti-12-8 \
+      libnvinfer10=$T libnvinfer-lean10=$T libnvinfer-plugin10=$T libnvinfer-vc-plugin10=$T libnvinfer-dispatch10=$T \
+      libnvonnxparsers10=$T libnvinfer-headers-dev=$T libnvinfer-headers-plugin-dev=$T libnvinfer-dev=$T \
+      libnvinfer-plugin-dev=$T libnvonnxparsers-dev=$T libnvinfer-bin=$T tensorrt-libs=$T python3-libnvinfer=$T \
+ && apt-mark hold 'libnvinfer*' 'libnvonnxparsers*' tensorrt-libs python3-libnvinfer && rm -rf /var/lib/apt/lists/*
+# harness shims (translations): trtexec with a 1 GiB workspace cap, tegrastats from nvidia-smi
+RUN mv /usr/src/tensorrt/bin/trtexec /usr/src/tensorrt/bin/trtexec.real
+COPY trtexec_shim.sh /usr/src/tensorrt/bin/trtexec
+COPY tegrastats_shim.sh /usr/local/bin/tegrastats
+RUN chmod 755 /usr/src/tensorrt/bin/trtexec /usr/local/bin/tegrastats && useradd -m -u 1000 -s /bin/bash burgerbarn
+USER burgerbarn
+WORKDIR /home/burgerbarn/vision
+RUN python3 -m venv --system-site-packages venv && . venv/bin/activate && pip install -q -U pip setuptools wheel \
+ && pip install -q --index-url https://download.pytorch.org/whl/cu128 torch==2.8.0 torchvision==0.23.0 \
+ && pip install -q "numpy<2" transformers==4.46.3 "onnx<1.18" pillow "matplotlib<3.9" \
+ && pip install -q --no-deps facenet-pytorch==2.6.0 \
+ && mkdir -p src engines && cd src && git clone -q https://github.com/NVIDIA-AI-IOT/torch2trt.git \
+ && git clone -q https://github.com/NVIDIA-AI-IOT/nanoowl.git \
+ && (cd torch2trt && git checkout -q 4e820ae && pip install -q --no-build-isolation --no-deps .) \
+ && (cd nanoowl && git checkout -q fb553de && pip install -q --no-build-isolation --no-deps .)
+CMD ["sleep", "infinity"]

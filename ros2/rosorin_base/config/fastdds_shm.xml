@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Fast DDS transports for every ROSOrin process (FASTRTPS_DEFAULT_PROFILES_FILE in the systemd units).
+     Why: Fast DDS's default shared-memory segment is 512 kB (its documentation: "Setting a segment_size close to or
+     smaller than the data size poses a high risk of data loss"). The camera's RGB image is 768 kB, depth 512 kB, so
+     images did not fit; measured 2026-10-05 with navigation always on: 56 MB/s through the loopback interface,
+     88,000 UDP datagrams/s, 5,900 kernel receive-buffer overflows/s, 30 % of all CPU time in the kernel, load
+     average 30. A segment that holds many images lets them travel through shared memory instead.
+     Test: scripts/tests/dds_large_data.py (isolated domain, with and without this file). -->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>shm_large</transport_id>
+      <type>SHM</type>
+      <segment_size>33554432</segment_size>
+      <!-- 2026-10-06 candidate for the "servers deaf to AMCL's transform" fault (docs/status.md): eProsima docs, SHM
+           transport: "Every time a DomainParticipant opens a Port (for reading or writing), a health check is
+           performed ... If the attached listeners do not respond in a given timeout, the Port is considered damaged,
+           and it is destroyed and created again." Default 1000 ms. All three faults came with a new participant
+           appearing under load (explore/come nodes, a self-check round) and only a restart helped. Not deployed. -->
+      <healthy_check_timeout_ms>5000</healthy_check_timeout_ms>
+    </transport_descriptor>
+    <transport_descriptor>
+      <transport_id>udp</transport_id>
+      <type>UDPv4</type>
+    </transport_descriptor>
+  </transport_descriptors>
+  <participant profile_name="rosorin_default" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>shm_large</transport_id>
+        <transport_id>udp</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+    </rtps>
+  </participant>
+</profiles>

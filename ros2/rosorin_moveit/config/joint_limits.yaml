@@ -1,0 +1,45 @@
+# From ros2/rosorin_base/config/arm_limits.yaml (pulses -> rad). Velocity = arm_max_speed 250 p/s.
+default_velocity_scaling_factor: 0.5
+default_acceleration_scaling_factor: 0.5
+default_robot_padding: 0.005     # = arm_model.py margin; cross-check 2026-09-29: unpadded MoveIt missed 6/3000 model hits
+joint_limits:
+  joint1:
+    has_position_limits: true
+    min_position: -1.95198
+    max_position: 1.95198
+    has_velocity_limits: true
+    max_velocity: 1.047
+    has_acceleration_limits: true
+    max_acceleration: 2.0
+  joint2:
+    has_position_limits: true
+    min_position: -1.84726
+    max_position: 1.69646
+    has_velocity_limits: true
+    max_velocity: 1.047
+    has_acceleration_limits: true
+    max_acceleration: 2.0
+  joint3:
+    has_position_limits: true
+    min_position: -1.59593
+    max_position: 1.92684
+    has_velocity_limits: true
+    max_velocity: 1.047
+    has_acceleration_limits: true
+    max_acceleration: 2.0
+  joint4:
+    has_position_limits: true
+    min_position: -1.82212
+    max_position: 1.58755
+    has_velocity_limits: true
+    max_velocity: 1.047
+    has_acceleration_limits: true
+    max_acceleration: 2.0
+  joint5:
+    has_position_limits: true
+    min_position: -1.96454
+    max_position: 1.96454
+    has_velocity_limits: true
+    max_velocity: 1.047
+    has_acceleration_limits: true
+    max_acceleration: 2.0

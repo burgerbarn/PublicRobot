@@ -1,0 +1,8 @@
+#!/bin/bash
+# "ssh" for test_lightbot_robot.sh: runs the remote command string (the last argument) in the test robot container
+# $LIGHTBOT_TEST_BOX as burgerbarn, or in a local bash when it is unset. Logs each command to ./ssh.log.
+echo "${@: -1}" >> ssh.log
+if [ -n "${LIGHTBOT_TEST_BOX:-}" ]; then
+  exec docker exec -u burgerbarn -w /home/burgerbarn -e HOME=/home/burgerbarn "$LIGHTBOT_TEST_BOX" bash -c "${@: -1}"
+fi
+exec bash -c "${@: -1}"

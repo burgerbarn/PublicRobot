@@ -1,0 +1,16 @@
+[Unit]
+Description=ROSOrin robot mind (attention: watch for the owner, track, curious, sleep) - arm only via joint_jog
+After=rosorin-base.service rosorin-camera.service
+Wants=rosorin-base.service rosorin-camera.service
+
+[Service]
+User=burgerbarn
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash -c 'source /opt/ros/humble/setup.bash && source /home/burgerbarn/ros2_ws/install/setup.bash && source /home/burgerbarn/vision/venv/bin/activate && cd /home/burgerbarn/vision && exec python mind.py'
+KillSignal=SIGINT
+TimeoutStopSec=15
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
